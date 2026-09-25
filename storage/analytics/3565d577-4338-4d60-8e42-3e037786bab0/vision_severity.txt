@@ -1,0 +1,18 @@
+=== VISION DEFECT SEVERITY & EXTENT ANALYSIS ===
+
+Severity × extent matrix:
+                   localized  intermittent     prevalent
+  slight                   0             0             0
+  moderate                 0             0             0
+  severe                   0             0             0
+  extreme                  0             0             0
+
+Average defect score by severity × extent:
+                   localized  intermittent     prevalent
+  slight                   0             0             0
+  moderate                 0             0             0
+  severe                   0             0             0
+  extreme                  0             0             0
+
+Note: score = severity_rank * 3 + extent_rank (1-9 scale)
+  Slight=1-3, Moderate=4-6, Severe=7-9, Extreme=7-9

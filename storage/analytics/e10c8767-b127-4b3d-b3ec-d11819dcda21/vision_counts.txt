@@ -1,0 +1,8 @@
+=== VISION DETECTION COUNTS ===
+Total unique defect tracks: 0
+
+Detection counts by class:
+
+Detection counts by severity:
+
+Detection counts by extent:

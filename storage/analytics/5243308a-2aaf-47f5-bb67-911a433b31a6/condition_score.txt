@@ -1,0 +1,17 @@
+=== CONDITION SCORE (Prototype Fusion Index) ===
+
+Overall score: 93.9 / 100
+Classification: excellent
+
+Score breakdown:
+  IRI: N/A
+  Video Deduct Value (DV): 0.0
+  Total Deduct Value (TDV): 0.0
+  Correction factor: 0.45
+  Corrected Deduct Value: 0.0
+  Defect count: 0
+  Breached types: 0
+
+IMPORTANT: This is a prototype fusion index, NOT the formal ASTM D6433 PCI.
+It is suitable for relative ranking of segments within a survey,
+not for compliance reporting.

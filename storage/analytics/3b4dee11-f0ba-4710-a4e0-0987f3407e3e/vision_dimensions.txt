@@ -1,0 +1,5 @@
+=== VISION DEFECT DIMENSIONS ===
+
+Area (m²): no data
+Width (mm): no data
+Max depth (mm): no data

@@ -1,0 +1,10 @@
+=== IRI QUALITY ASSESSMENT ===
+
+Quality status: good
+Quality flags: none
+Estimated IRI uncertainty: 0.0 m/km
+
+Flag interpretation:
+  - input_sample_rate_below_10hz: 1 Hz sampling limits spatial resolution
+  - moving_distance_below_50m_segment: survey too short for segment-level IRI
+  - usable_with_validation_required: results are usable but require field validation

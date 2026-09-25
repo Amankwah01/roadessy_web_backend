@@ -1,0 +1,34 @@
+============================================================
+ANALYTICS SUMMARY — Run ID: 3b4dee11-f0ba-4710-a4e0-0987f3407e3e
+============================================================
+
+IRI (displacement-to-distance): 1.5184 m/km
+Classification: Very Good (5-rank), code 1
+Total distance: 6.91 m
+IRI segments (50 m): 1
+GPS points: 1093
+Defect tracks detected: 0
+Condition score: 93.9 / 100 (excellent)
+
+Exported files:
+  condition_score.txt
+  correlation_analysis.txt
+  gps_speed_histogram.csv
+  gps_statistics.txt
+  gps_trajectory.csv
+  iri_classification_histogram.csv
+  iri_histogram.csv
+  iri_segments.csv
+  iri_statistics.txt
+  iri_vs_defects_correlation.csv
+  map_matching.txt
+  map_matching_snapped_points.csv
+  quality_flags.txt
+  vision_counts.txt
+  vision_counts_by_class.csv
+  vision_counts_by_extent.csv
+  vision_counts_by_severity.csv
+  vision_dimensions.csv
+  vision_dimensions.txt
+  vision_registry.csv
+  vision_severity.txt

@@ -1,0 +1,10 @@
+=== CORRELATION: IRI vs DEFECT DENSITY ===
+
+Segments analysed: 1
+Segments with defects: 0
+Total defects correlated: 0
+
+Insufficient segments for correlation analysis.
+
+Interpretation: positive r indicates segments with higher IRI
+tend to have more defects.

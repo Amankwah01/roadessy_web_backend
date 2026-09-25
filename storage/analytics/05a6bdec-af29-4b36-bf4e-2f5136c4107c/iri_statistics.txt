@@ -1,0 +1,40 @@
+=== IRI DESCRIPTIVE STATISTICS ===
+
+Overall IRI (weighted mean): 1.5184 m/km
+Total distance: 6.91 m
+Number of segments: 1
+Segment length: 50.0 m
+
+  Count                         : 1.000000
+  Minimum                       : 1.518368
+  Maximum                       : 1.518368
+  Mean                          : 1.518368
+  Median                        : 1.518368
+  Standard deviation            : 0.000000
+  Q1 (25th percentile)          : 1.518368
+  Q3 (75th percentile)          : 1.518368
+  Interquartile range           : 0.000000
+  Skewness                      : 0.000000
+  Kurtosis                      : 0.000000
+
+=== 5-RANK CLASSIFICATION DISTRIBUTION ===
+  Very Good   :    1  (100.0%)  range 1.52–1.52 m/km
+  Good        :    0  (0.0%)  range 0.00–0.00 m/km
+  Fair        :    0  (0.0%)  range 0.00–0.00 m/km
+  Poor        :    0  (0.0%)  range 0.00–0.00 m/km
+  Very Poor   :    0  (0.0%)  range 0.00–0.00 m/km
+
+=== 3-RANK GENERALIZED STATUS ===
+  good        :    1  (100.0%)  action: Maintenance
+  fair        :    0  (0.0%)  action: Rehabilitation
+  poor        :    0  (0.0%)  action: Reconstruction
+
+=== QUALITY ===
+  Quality status: good
+  Quality flags: none
+  Estimated IRI uncertainty: 0.0 m/km
+  Input sample rate: 100.00 Hz
+  Raw samples: 0
+  Resampled samples: 0
+  Distance-domain samples: 0
+  Moving duration: 0.00 s

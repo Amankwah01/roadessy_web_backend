@@ -1,0 +1,21 @@
+=== MAP MATCHING STATISTICS ===
+
+Total GPS points: 1093
+Matched points: 1093
+Unmatched points: 0
+Match rate: 100.0%
+Matched road: 1
+Chainage range: 51438.15602526848 – 51438.15602526848 m
+Matched distance: 0.00 m
+
+Snapped trajectory (first 10 points):
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16
+  lat=6.908028, lon=-2.566399, chainage=51438.16

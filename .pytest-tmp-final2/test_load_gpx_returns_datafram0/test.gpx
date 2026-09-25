@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx>
+  <trk>
+    <trkseg>
+      <trkpt lat="1.0" lon="2.0"><time>2024-01-01T00:00:00Z</time></trkpt>
+      <trkpt lat="1.001" lon="2.001"><time>2024-01-01T00:00:01Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+*.log
+*.sqlite3
+roadessy.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.kilo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.example
+
+
+# Uploaded survey videos
+app/api/storage/
+
+# Database backups / large datasets
+db_backup/
+
+# Video files
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Database dumps
+*.dump
+*.sql
+
+# Large datasets
+*.csv
+*.parquet
+*.feather
+
+# ML / AI model files
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Generated outputs
+outputs/
+results/
+runs/

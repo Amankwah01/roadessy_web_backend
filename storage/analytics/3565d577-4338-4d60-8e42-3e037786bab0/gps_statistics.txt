@@ -1,0 +1,23 @@
+=== GPS DATA QUALITY ASSESSMENT ===
+
+Bounding box (WGS84):
+  Latitude:  6.644588 to 6.684872
+  Longitude: -1.575742 to -1.566437
+  Centre point: lat=6.671088, lon=-1.571032
+
+Trajectory statistics:
+  Total points: 1093
+  Total distance (haversine): 6337.48 m (6.3375 km)
+  Straight-line distance (start to end): 4255.54 m
+  Sinuosity ratio: 0.6715
+
+GPS accuracy: not available in dataset
+
+Speed distribution:
+  Min: 0.00 km/h
+  Max: 63.00 km/h
+  Mean: 20.05 km/h
+  Median: 21.00 km/h
+  Std: 16.77 km/h
+  Moving points: 839
+  Stationary points: 254
