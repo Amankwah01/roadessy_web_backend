@@ -1,51 +1,100 @@
 # app/api/routes/analysis.py
-import datetime
 import json
+import logging
 import math
 import os
 import shutil
 import uuid
-import zipfile
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, List, Optional, Tuple, cast
 
 import cv2
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, Response
-from sqlalchemy.orm import Session
-
-from app.core.logger import get_pipeline_logger, iri_logger
-from app.database.session import get_db
-from app.models.survey import SurveyRun, TrackedDefect, IRISegment, MapMatchingRun
-from app.schemas.payloads import CameraCalibrationMetadata, CameraIntrinsics
-from app.services.inertial_service import (
-    InertialPipelineResult,
-    CombinedIRIResult,
-    ASTMQCMResult,
-    InertialRefineryService
-)
-from app.services.fusion_service import PavementConditionFusioneer
-from app.services.gps_service import UniversalGPSService
-from app.services.vision_service import DEFAULT_MODEL_PATH, VisionAnalysisService
-from app.services.heavy_compute import run_heavy_pipeline
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from shapely import wkb as shapely_wkb
 from shapely import wkt as shapely_wkt
 
-router = APIRouter(prefix="/analysis", tags=["Modular Road Analysis Engine"])
+from app.core.config import ASTM_PCI_DISABLED_REASON, ASTM_PCI_ENABLED
+from app.core.logger import get_pipeline_logger, iri_logger
+from app.core.security import get_principal
+from app.database.session import get_db
+from app.models.survey import (
+    IRISegment,
+    MapMatchingRun,
+    Project,
+    Road,
+    SurveyRun,
+    TrackedDefect,
+)
+from app.services.inertial import InertialRefineryService
+from app.services.pipeline.heavy_compute import run_heavy_pipeline
 
-BASE_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage")
-DEFECT_IMAGES_DIR = os.path.join(BASE_STORAGE_DIR, "defect_images")
-os.makedirs(DEFECT_IMAGES_DIR, exist_ok=True)
-VIDEOS_DIR = os.path.join(BASE_STORAGE_DIR, "videos")
-GPS_DIR = os.path.join(BASE_STORAGE_DIR, "gps")
-PLOTS_DIR = os.path.join(BASE_STORAGE_DIR, "plots")
-ANALYTICS_DIR = os.path.join(BASE_STORAGE_DIR, "analytics")
+router = APIRouter(prefix="/analysis", tags=["Modular Road Analysis Engine"])
+logger = logging.getLogger("roadessy.analysis")
+
+# Artifact storage lives beside the pipeline output directory so the API serves
+# exactly what the pipeline wrote, instead of a second empty tree.
+OUTPUT_BASE_DIR = Path(
+    os.getenv("ROADESSY_OUTPUT_DIR", r"F:\Adubofour\rodeessy_mphil\RoadSurveyOutputs")
+)
+DEFECT_IMAGES_DIR = str(OUTPUT_BASE_DIR / "defect_images")
+VIDEOS_DIR = str(OUTPUT_BASE_DIR / "videos")
+GPS_DIR = str(OUTPUT_BASE_DIR / "gps")
+PLOTS_DIR = str(OUTPUT_BASE_DIR / "plots")
+ANALYTICS_DIR = str(OUTPUT_BASE_DIR / "analytics")
+for _directory in (DEFECT_IMAGES_DIR, VIDEOS_DIR, GPS_DIR, PLOTS_DIR, ANALYTICS_DIR):
+    os.makedirs(_directory, exist_ok=True)
+
+
+def _run_workspace_candidates(run_id: str) -> List[Path]:
+    """Directories a run's artifacts may live in, most specific first."""
+    return [
+        OUTPUT_BASE_DIR / str(run_id),
+        OUTPUT_BASE_DIR / "defect_images",
+        OUTPUT_BASE_DIR / "videos",
+        OUTPUT_BASE_DIR / "gps",
+        OUTPUT_BASE_DIR / "plots",
+        OUTPUT_BASE_DIR / "analytics",
+    ]
+
+
+def _resolve_run_artifact(run_id: str, file_name: str) -> Optional[str]:
+    """Resolve a stored artifact filename against the known run directories.
+
+    Rejects any path that escapes the artifact root.
+    """
+    safe_name = os.path.basename(str(file_name))
+    if not safe_name or safe_name in {".", ".."}:
+        return None
+
+    for directory in _run_workspace_candidates(run_id):
+        candidate = directory / safe_name
+        try:
+            candidate.resolve().relative_to(OUTPUT_BASE_DIR.resolve())
+        except (ValueError, OSError):
+            continue
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _find_run_artifact(run_id: str, extensions: Tuple[str, ...]) -> Optional[str]:
+    """Find a run artifact by trying known filenames then a prefix scan."""
+    for extension in extensions:
+        resolved = _resolve_run_artifact(run_id, f"{run_id}{extension}")
+        if resolved:
+            return resolved
+    for directory in _run_workspace_candidates(run_id):
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.iterdir()):
+            if entry.is_file() and entry.name.startswith(str(run_id)) and entry.suffix.lower() in extensions:
+                return str(entry)
+    return None
 
 
 def _haversine_distance_m(point_a, point_b):
@@ -134,6 +183,60 @@ def _geometry_wkt(value):
         except Exception:
             pass
     return str(value)
+
+
+def _resolve_ownership(
+    principal: dict, submitted_user_id: str, submitted_org_id: str
+) -> tuple:
+    """Prefer the verified session identity over client-supplied form fields."""
+    verified_user_id = principal.get("user_id")
+    verified_org_id = principal.get("org_id")
+    resolved_user = verified_user_id or submitted_user_id or "operator_default"
+    resolved_org = verified_org_id or submitted_org_id or "org_default"
+    return resolved_user, resolved_org
+
+
+def _parse_calibration_overrides(raw: Optional[str]) -> Optional[dict]:
+    """Parse calibration metadata JSON into pipeline camera overrides."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"calibration_metadata_json is not valid JSON: {exc}",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="calibration_metadata_json must be a JSON object",
+        )
+    return parsed
+
+
+def _as_float(value: Any) -> Optional[float]:
+    """Coerce a nullable numeric column to float, preserving None."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _run_total_distance_m(db: Session, run_uuid) -> Optional[float]:
+    """Total surveyed distance, taken from the furthest IRI segment end."""
+    try:
+        segment = (
+            db.query(IRISegment)
+            .filter(IRISegment.run_id == run_uuid)
+            .order_by(IRISegment.segment_end_m.desc())
+            .first()
+        )
+        return float(getattr(segment, "segment_end_m")) if segment else None
+    except Exception:
+        return None
 
 
 def _map_matching_payload(record):
@@ -586,24 +689,30 @@ async def get_latest_run(db: Session = Depends(get_db)):
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
-                "run_id": None,
-                "name": None,
-                "computed_iri": None,
-                "final_pci": None,
-                "astm_pci": None,
-                "astm_qcm_iri": None,
-                "roadessy_pci": None,
-                "simple_iri": None,
+                    "run_id": None,
+                    "name": None,
+                    "computed_iri": None,
+                    "final_pci": None,
+                    "astm_pci": None,
+                    "astm_qcm_iri": None,
+                    "roadessy_pci": None,
+                    "simple_iri": None,
                 },
             )
 
+        # Return every track metric the frontend schema declares, not just two.
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
                 "run_id": str(run.run_id),
                 "name": run.name,
-                "computed_iri": float(getattr(run, "computed_iri", None) or 0),
-                "final_pci": float(getattr(run, "final_pci", None) or 0),
+                "computed_iri": _as_float(run.computed_iri),
+                "final_pci": _as_float(run.final_pci),
+                "astm_pci": _as_float(getattr(run, "astm_pci", None)),
+                "astm_pci_enabled": ASTM_PCI_ENABLED,
+                "astm_qcm_iri": _as_float(getattr(run, "astm_qcm_iri", None)),
+                "roadessy_pci": _as_float(getattr(run, "roadessy_pci", None)),
+                "simple_iri": _as_float(getattr(run, "simple_iri", None)),
             },
         )
     except Exception as e:
@@ -626,6 +735,87 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
     # Get IRI segments with all track data
     iri_segments = db.query(IRISegment).filter(IRISegment.run_id == rid).order_by(IRISegment.segment_start_m).all()
     
+    # Compute segment geometries from run trajectory
+    trajectory_coords = None
+    if run.geom_trajectory:
+        try:
+            geom = shapely_wkb.loads(bytes(run.geom_trajectory.data))
+            if geom.geom_type == "LineString":
+                trajectory_coords = list(geom.coords)
+        except Exception:
+            pass
+
+    def _slice_trajectory_local(coords, start_m, end_m):
+        """Slice a trajectory between start_m and end_m meters."""
+        if not coords or len(coords) < 2:
+            return None
+
+        start = max(0.0, float(start_m))
+        end = max(start, float(end_m))
+        cumulative_distances = [0.0]
+        for previous, current in zip(coords, coords[1:]):
+            cumulative_distances.append(cumulative_distances[-1] + _haversine_distance_m(previous, current))
+
+        total_distance = cumulative_distances[-1]
+        if total_distance <= 0:
+            return None
+
+        start = min(start, total_distance)
+        end = min(end, total_distance)
+        sliced_coords = [_interpolate_trajectory_point(coords, cumulative_distances, start)]
+        for coordinate, distance_m in zip(coords[1:], cumulative_distances[1:]):
+            if distance_m >= start and distance_m <= end:
+                sliced_coords.append(list(coordinate))
+        sliced_coords.append(_interpolate_trajectory_point(coords, cumulative_distances, end))
+
+        return sliced_coords if len(sliced_coords) >= 2 else None
+
+    def _interpolate_trajectory_point_local(coords, cumulative_distances, distance_m):
+        if distance_m <= 0:
+            return list(coords[0])
+        if distance_m >= cumulative_distances[-1]:
+            return list(coords[-1])
+
+        for index in range(1, len(cumulative_distances)):
+            if cumulative_distances[index] >= distance_m:
+                previous_distance = cumulative_distances[index - 1]
+                segment_distance = cumulative_distances[index] - previous_distance
+                ratio = 0.0 if segment_distance == 0 else (distance_m - previous_distance) / segment_distance
+                return [
+                    float(previous_value) + ratio * (float(current_value) - float(previous_value))
+                    for previous_value, current_value in zip(coords[index - 1], coords[index])
+                ]
+
+        return list(coords[-1])
+
+    # Build all_roughness_segments with actual geometries
+    all_roughness_segments = {"type": "FeatureCollection", "features": []}
+    if trajectory_coords:
+        segment_features = []
+        for seg in iri_segments:
+            sliced = _slice_trajectory_local(trajectory_coords, seg.segment_start_m, seg.segment_end_m)
+            if sliced:
+                segment_features.append({
+                    "id": str(seg.id),
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": sliced
+                    },
+                    "properties": {
+                        "run_id": str(seg.run_id),
+                        "run_title": run.name,
+                        "start_chainage_m": seg.segment_start_m,
+                        "end_chainage_m": seg.segment_end_m,
+                        "roughness_value": seg.iri_value or seg.simple_iri or seg.astm_qcm_iri or 0,
+                        "avg_speed_mps": 0,
+                        "quality_flags": {
+                            "road_condition": seg.classification,
+                        }
+                    }
+                })
+        all_roughness_segments["features"] = segment_features
+    
     processing_metadata = _decode_metadata(getattr(run, "processing_metadata", None))
     map_matching = _map_matching_payload(
         db.query(MapMatchingRun).filter(MapMatchingRun.run_id == rid).first()
@@ -634,6 +824,88 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
     created_at_val = getattr(run, "created_at", None)
     created_at_iso = created_at_val.isoformat() if created_at_val is not None else None
 
+    # Get potholes from tracked defects with failure_mode == "pothole"
+    pothole_defects = db.query(TrackedDefect).filter(
+        TrackedDefect.run_id == rid,
+        TrackedDefect.failure_mode == "pothole"
+    ).all()
+
+    potholes_features = []
+    for defect in pothole_defects:
+        if defect.geom_location:
+            try:
+                geom = shapely_wkb.loads(bytes(defect.geom_location.data))
+                potholes_features.append({
+                    "id": str(defect.id),
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [float(geom.x), float(geom.y)]
+                    },
+                    "properties": {
+                        "timestamp": defect.created_at.isoformat() if defect.created_at else "",
+                        "severity": defect.ghana_rating_1to9 or 1,
+                        "confidence": defect.confidence or 0,
+                        "meta": {},
+                        "created_at": defect.created_at.isoformat() if defect.created_at else "",
+                        "run": str(rid),
+                        "org": run.organisation_id,
+                        "image_asset": defect.image_path,
+                        "image_url": defect.image_path,
+                        "clip_asset": None,
+                    }
+                })
+            except Exception:
+                pass
+
+    potholes_geojson = {
+        "type": "FeatureCollection",
+        "features": potholes_features
+    }
+
+    # Get assets for this run
+    assets = []
+    # Note: Asset model would need to be queried here if it exists
+    # For now return empty array
+
+    # Get user/org info for created_by and team
+    created_by = {
+        "id": run.user_id,
+        "username": run.user_id,  # Placeholder
+        "email": run.user_id,
+        "full_name": run.user_id
+    }
+
+    project = None
+    if run.project_id:
+        project = db.query(Project).filter(Project.id == run.project_id).first()
+    team_info = None
+    if project:
+        team_info = {
+            "id": str(project.team_id) if project.team_id else str(project.id),
+            "org": {
+                "id": project.org_id,
+                "name": project.org_name,
+                "is_active": True,
+                "created_at": project.created_at.isoformat() if project.created_at else "",
+                "is_personal": project.visibility == "PERSONAL",
+                "owner": project.created_by
+            },
+            "name": project.name,
+            "description": project.description,
+            "is_default_personal": project.visibility == "PERSONAL",
+            "is_active": True,
+            "created_at": project.created_at.isoformat() if project.created_at else ""
+        }
+
+    updated_at_val = getattr(run, "updated_at", None)
+    updated_at_iso = updated_at_val.isoformat() if updated_at_val is not None else created_at_iso
+
+    road_row = db.query(Road).filter(Road.id == run.road_id).first() if run.road_id else None
+    road_name = getattr(road_row, "name", None)
+
+    total_distance_m = _run_total_distance_m(db, rid)
+
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -641,9 +913,14 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
             "name": run.name,
             "user_id": run.user_id,
             "organisation_id": run.organisation_id,
+            "project_id": str(run.project_id) if run.project_id else None,
+            "road_id": str(run.road_id) if run.road_id else None,
             
-            # Track 1: ASTM
+            # Track 1: ASTM. astm_pci is null while the PCI is muted, so the
+            # flag and the reason travel beside it rather than a bare null.
             "astm_pci": getattr(run, "astm_pci", None),
+            "astm_pci_enabled": ASTM_PCI_ENABLED,
+            "astm_pci_disabled_reason": None if ASTM_PCI_ENABLED else ASTM_PCI_DISABLED_REASON,
             "astm_qcm_iri": getattr(run, "astm_qcm_iri", None),
             "astm_quality_flags": getattr(run, "astm_quality_flags", None),
             "astm_upsampling_info": getattr(run, "astm_upsampling_info", None),
@@ -661,13 +938,37 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
             "geom_trajectory": _geometry_wkt(run.geom_trajectory),
             "map_matching": map_matching,
             "created_at": created_at_iso,
+            "updated_at": updated_at_iso,
             "processing_metadata": processing_metadata,
             "defects_count": defects_count,
+            
+            # Frontend expected fields
+            "title": run.name,
+            "status": "COMPLETED",
+            "scope": project.visibility if project and getattr(project, "visibility", None) else "PERSONAL",
+            "distance_m": total_distance_m,
+            "avg_roughness": getattr(run, "computed_iri", None),
+            "pothole_counts": len(potholes_features),
+            "external_project_id": str(run.project_id) if run.project_id else None,
+            "external_road_id": str(run.road_id) if run.road_id else None,
+            "project_name": project.name if project else None,
+            "road_name": road_name,
+            "roughness_geojson_url": f"/analysis/iri/segments/geojson?run_id={rid}",
+            "all_roughness_segments": all_roughness_segments,
+            "potholes": potholes_geojson,
+            "all_assets": assets,
+            "created_by": created_by,
+            "team": team_info,
+            "can_write": True,
+            "started_at": None,
+            "ended_at": None,
             
             # IRI Segments with all tracks
             "iri_segments": [
                 {
                     "id": seg.id,
+                    "run_id": str(seg.run_id),
+                    "road_id": seg.road_id,
                     "segment_start_m": seg.segment_start_m,
                     "segment_end_m": seg.segment_end_m,
                     "iri_value": seg.iri_value,
@@ -676,8 +977,43 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
                     "astm_pci_segment": getattr(seg, "astm_pci_segment", None),
                     "roadessy_pci_segment": getattr(seg, "roadessy_pci_segment", None),
                     "classification": seg.classification,
+                    "geom_location": None,  # Would need geometry
                 }
                 for seg in iri_segments
+            ],
+            
+            # Tracked defects
+            "tracked_defects": [
+                {
+                    "id": defect.id,
+                    "run_id": str(defect.run_id),
+                    "track_id": defect.track_id,
+                    "failure_mode": defect.failure_mode,
+                    "max_area_m2": defect.max_area_m2,
+                    "max_width_mm": defect.max_width_mm,
+                    "max_depth_mm": defect.max_depth_mm,
+                    "mean_depth_mm": defect.mean_depth_mm,
+                    "depth_confidence": defect.depth_confidence,
+                    "depth_method": defect.depth_method,
+                    "depth_message": defect.depth_message,
+                    "deduct_value": defect.deduct_value,
+                    "image_path": defect.image_path,
+                    "astm_distress_type": defect.astm_distress_type,
+                    "ghana_distress_type": defect.ghana_distress_type,
+                    "ghana_rating_1to9": defect.ghana_rating_1to9,
+                    "yolo_class_id": defect.yolo_class_id,
+                    "confidence": defect.confidence,
+                    "chainage_m": defect.chainage_m,
+                    # Distance since the run started is not comparable between
+                    # surveys; the station along the matched road is, and it is
+                    # null when the run did not match a road.
+                    "station_m": defect.station_m,
+                    "station_road_id": defect.station_road_id,
+                    "station_source": defect.station_source,
+                    "chainage_offset_m": defect.chainage_offset_m,
+                    "geom_location": None,
+                }
+                for defect in db.query(TrackedDefect).filter(TrackedDefect.run_id == rid).all()
             ],
         },
     )
@@ -717,7 +1053,6 @@ async def list_runs(limit: int = 50, db: Session = Depends(get_db)):
             created_at_val = getattr(run, "created_at", None)
             created_at_iso = created_at_val.isoformat() if created_at_val is not None else None
 
-            map_matching = map_matching_by_run.get(run.run_id)
             matched_road_id = getattr(run, "matched_road_id", None)
             simple_iri = getattr(run, "simple_iri", None)
             astm_qcm_iri = getattr(run, "astm_qcm_iri", None)
@@ -726,52 +1061,34 @@ async def list_runs(limit: int = 50, db: Session = Depends(get_db)):
             computed_iri = run.computed_iri
             final_pci = run.final_pci
             name = run.name
+            defects_count = db.query(TrackedDefect).filter(TrackedDefect.run_id == run.run_id).count()
 
-            # Compute total distance from IRI segments
-            total_distance_m = None
-            try:
-                segments = db.query(IRISegment).filter(IRISegment.run_id == run.run_id).order_by(IRISegment.segment_end_m.desc()).first()
-                if segments:
-                    total_distance_m = float(getattr(segments, "segment_end_m", 0.0))
-            except Exception:
-                pass
-
-            # Count defects
-            defects_count = None
-            try:
-                from app.models.survey import TrackedDefect
-                defects_count = db.query(TrackedDefect).filter(TrackedDefect.run_id == run.run_id).count()
-            except Exception:
-                pass
-
-            runs.append(
-                {
-                    "run_id": str(run.run_id),
-                    "name": name,
-                    "computed_iri": computed_iri,
-                    "final_pci": final_pci,
-                    "roadessy_pci": roadessy_pci,
-                    "astm_pci": astm_pci,
-                    "simple_iri": simple_iri,
-                    "astm_qcm_iri": astm_qcm_iri,
-                    "matched_road_id": matched_road_id,
-                    "total_distance_m": total_distance_m,
-                    "defects_count": defects_count,
-                    "map_matching": map_matching_by_run.get(run.run_id),
-                    "created_at": created_at_iso,
-                    "processing_metadata": processing_metadata,
-                }
-            )
+            runs.append({
+                "run_id": str(run.run_id),
+                "name": name,
+                "computed_iri": computed_iri,
+                "final_pci": final_pci,
+                "roadessy_pci": roadessy_pci,
+                "astm_pci": astm_pci,
+                "simple_iri": simple_iri,
+                "astm_qcm_iri": astm_qcm_iri,
+                "matched_road_id": matched_road_id,
+                "total_distance_m": _run_total_distance_m(db, run.run_id),
+                "defects_count": defects_count,
+                "map_matching": map_matching_by_run.get(run.run_id),
+                "created_at": created_at_iso,
+                "processing_metadata": processing_metadata,
+            })
 
         return JSONResponse(status_code=status.HTTP_200_OK, content={"runs": runs})
     except Exception as e:
-        import traceback
-        error_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-        print(error_msg)  # Force print to standard output
+        logger.exception("Failed to list runs")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Failed to list runs: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list runs: {str(e)}",
         )
+
+
 @router.get("/roads", response_class=JSONResponse)
 async def list_roads_with_survey_data(db: Session = Depends(get_db)):
     """
@@ -1015,9 +1332,9 @@ async def get_defect_image(run_id: str, track_id: int, db: Session = Depends(get
     if not defect or not isinstance(image_filename, str) or not image_filename:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Defect image not found")
 
-    image_path = os.path.join(DEFECT_IMAGES_DIR, image_filename)
-
-    if not os.path.exists(image_path):
+    # image_path is stored relative to the run workspace written by the pipeline.
+    image_path = _resolve_run_artifact(str(rid), image_filename)
+    if image_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image file not found")
 
     return FileResponse(image_path, media_type="image/jpeg")
@@ -1052,77 +1369,53 @@ async def get_run_iri_segments(run_id: str, db: Session = Depends(get_db)):
 
 
 # -------------------------------------------------------------------------
-# 2. ISOLATED VISION ROUTE (Test Video Tracking Separately)
+# 2. MAIN SURVEY INGESTION ROUTE
 # -------------------------------------------------------------------------
-@router.post("/test-vision", response_class=JSONResponse)
-async def analyze_vision_telemetry(
-    video_data: UploadFile = File(..., description="Forward-facing dashcam video stream (.mp4)"),
-    calibration_metadata_json: str = Form(..., description="Stringified camera configuration JSON"),
-):
-    """
-    Isolates the computer vision and tracking logic. Use this endpoint to test YOLOv11 segmentation
-    inference loops and ground plane metrics without calculating roughness or committing data to a database.
-    """
-    scratch_id = str(uuid.uuid4())
-    temp_dir = f"scratch_vision_{scratch_id}"
-    os.makedirs(temp_dir, exist_ok=True)
-    vid_path = os.path.join(temp_dir, "video.mp4")
-
-    try:
-        with open(vid_path, "wb") as buffer:
-            shutil.copyfileobj(video_data.file, buffer)
-
-        try:
-            parsed_meta = CameraCalibrationMetadata(**json.loads(calibration_metadata_json))
-        except Exception as err:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid calibration data: {str(err)}")
-
-        vision_service = VisionAnalysisService(
-            model_path=DEFAULT_MODEL_PATH,
-            camera_height_m=parsed_meta.camera_height_meters,
-            camera_tilt_deg=parsed_meta.camera_tilt_degrees,
-            fx=parsed_meta.intrinsics.fx if parsed_meta.intrinsics else 1000.0,
-            fy=parsed_meta.intrinsics.fy if parsed_meta.intrinsics else 1000.0,
-        )
-        tracking_registry = vision_service.process_video_stream(vid_path, run_id=scratch_id)
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "Vision tracking pipeline processed successfully in isolation",
-                "total_unique_defects_tracked": len(tracking_registry.detections),
-                "defects_raw_registry": tracking_registry,
-            },
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Vision fault: {str(e)}")
-    finally:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            
-            
-            
 @router.post("/process", response_class=JSONResponse)
 async def process_full_survey(
     user_id: str = Form(..., description="ID of the user running the survey"),
     organisation_id: str = Form(..., description="Organization identifier"),
     name: str = Form(..., description="Descriptive name for the survey run"),
     matched_road_id: Optional[str] = Form(None, description="Optional road centerline ID to match against"),
+    road_id: Optional[str] = Form(None, description="UUID of the roads.id row this survey belongs to"),
+    project_id: Optional[str] = Form(None, description="UUID of the projects.id row this survey belongs to"),
     video: UploadFile = File(..., description="Forward-facing dashcam video stream (.mp4)"),
     gps: Optional[UploadFile] = File(None, description="GPS telemetry log (.csv or .gpx)"),
+    gps_source: Optional[str] = Form(
+        "auto",
+        description=(
+            "Which recording the route is taken from: 'auto' (uploaded GPS file, "
+            "else the vibration log), 'overlay' to read the position burned into "
+            "the video, or 'video' for the container's own metadata."
+        ),
+    ),
     vibration: UploadFile = File(..., description="High-frequency accelerometer log (.csv)"),
     calibration_metadata_json: Optional[str] = Form(None, description="Stringified camera calibration metadata JSON"),
+    calibration_profile_id: Optional[int] = Form(None, description="Stored calibration_profiles.id to use for this run"),
+    use_overlay_clock: Optional[bool] = Form(
+        False,
+        description=(
+            "Take each frame's time from the date-time burned into the video "
+            "instead of dividing the GPS span by the frame count. Slower, but it "
+            "is the only option that can see frames missing from the middle of "
+            "a run. Falls back automatically when the overlay is unreadable."
+        ),
+    ),
     db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
 ):
     """
     Executes the complete Roadessy survey pipeline with TWO pipelines:
     Pipeline 1: ASTM (QCM IRI @ 100Hz + MDPI Vision + ASTM PCI)
     Pipeline 2: Roadessy (Simple IRI + Ghana Manual Table 3 Vision -> Roadessy PCI)
-    
-    All outputs saved to F:\\RoadSurveyOutputs\\{run_id}\\
+
+    Ownership is taken from the verified Clerk session when one is present; the
+    form fields are only trusted for anonymous development callers.
     """
+    resolved_user_id, resolved_org_id = _resolve_ownership(principal, user_id, organisation_id)
+
     run_id = uuid.uuid4()
-    scratch_dir = os.path.join(BASE_STORAGE_DIR, "workspaces", str(run_id))
+    scratch_dir = os.path.join(str(OUTPUT_BASE_DIR), "workspaces", str(run_id))
     os.makedirs(scratch_dir, exist_ok=True)
 
     vid_path = os.path.join(scratch_dir, "video.mp4")
@@ -1134,14 +1427,16 @@ async def process_full_survey(
         if video and video.file:
             with open(vid_path, "wb") as buffer:
                 shutil.copyfileobj(video.file, buffer)
-        
+
         if gps and gps.file:
             with open(gps_path, "wb") as buffer:
                 shutil.copyfileobj(gps.file, buffer)
-            
+
         if vibration and vibration.file:
             with open(vib_path, "wb") as buffer:
                 shutil.copyfileobj(vibration.file, buffer)
+
+        camera_overrides = _parse_calibration_overrides(calibration_metadata_json)
 
         # Run the heavy compute pipeline (2 pipelines)
         result = run_heavy_pipeline(
@@ -1149,8 +1444,16 @@ async def process_full_survey(
             gps_file_path=gps_path,
             video_path=vid_path,
             road_id=matched_road_id,
-            camera_profile_id=None,
+            camera_profile_id=calibration_profile_id,
             run_id=str(run_id),
+            user_id=resolved_user_id,
+            organisation_id=resolved_org_id,
+            run_name=name.strip() or None,
+            project_id=project_id,
+            road_uuid=road_id,
+            camera_overrides=camera_overrides,
+            use_overlay_clock=bool(use_overlay_clock),
+            gps_source=(gps_source or "auto"),
         )
 
         return JSONResponse(
@@ -1188,75 +1491,74 @@ async def process_full_survey(
 @router.get("/runs/{run_id}/analytics", response_class=JSONResponse)
 async def get_run_analytics(run_id: str, db: Session = Depends(get_db)):
     """List analytics files available for a given run."""
-    run_analytics_dir = os.path.join(ANALYTICS_DIR, run_id)
-    if not os.path.isdir(run_analytics_dir):
+    files: List[str] = []
+    seen = set()
+    for directory in _run_workspace_candidates(run_id):
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.iterdir()):
+            if entry.is_file() and entry.name not in seen:
+                seen.add(entry.name)
+                files.append(entry.name)
+
+    if not files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No analytics found for this run")
-    files = sorted(
-        f for f in os.listdir(run_analytics_dir)
-        if os.path.isfile(os.path.join(run_analytics_dir, f))
-    )
+
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"run_id": run_id, "files": files},
+        content={"run_id": run_id, "files": sorted(files)},
     )
+
+
+_ANALYTICS_MEDIA_TYPES = {
+    ".txt": "text/plain",
+    ".json": "application/json",
+    ".csv": "text/csv",
+}
 
 
 @router.get("/runs/{run_id}/analytics/{file_name:path}", response_class=FileResponse)
 async def download_run_analytics_file(run_id: str, file_name: str):
     """Serve a specific analytics file for a run."""
-    file_path = os.path.join(ANALYTICS_DIR, run_id, file_name)
-    if not os.path.isfile(file_path):
+    file_path = _resolve_run_artifact(run_id, file_name)
+    if file_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analytics file not found")
-    media_type = "text/plain" if file_name.endswith(".txt") else "text/csv"
+    media_type = _ANALYTICS_MEDIA_TYPES.get(os.path.splitext(file_path)[1].lower(), "application/octet-stream")
     return FileResponse(file_path, media_type=media_type, filename=os.path.basename(file_path))
 
 
 @router.get("/download/video-with-detections/{run_id}", response_class=FileResponse)
 async def download_video_with_detections(run_id: str):
     """Serve the processed video with detections overlay for a run."""
-    for ext in (".mp4", ".avi", ".mov", ".mkv"):
-        candidate = os.path.join(VIDEOS_DIR, f"{run_id}{ext}")
-        if os.path.isfile(candidate):
-            return FileResponse(candidate, media_type="video/mp4", filename=os.path.basename(candidate))
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed video not found")
+    video_path = _find_run_artifact(run_id, (".mp4", ".mov", ".mkv", ".avi"))
+    if video_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed video not found")
+    return FileResponse(video_path, media_type="video/mp4", filename=f"{run_id}_detections.mp4")
 
 
 @router.get("/download/gps-shp/{run_id}", response_class=Response)
 async def download_gps_shapefile(run_id: str):
     """Serve GPS data as CSV for a run."""
-    for ext in (".csv", ".gpx", ".shp"):
-        candidate = os.path.join(GPS_DIR, f"{run_id}{ext}")
-        if os.path.isfile(candidate):
-            if ext == ".csv":
-                content = open(candidate, "r", encoding="utf-8").read()
-                return Response(
-                    content=content,
-                    media_type="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename={run_id}_gps.csv"},
-                )
-    # Fallback: generate CSV from the first GPS file found
-    gps_files = [f for f in os.listdir(GPS_DIR) if f.startswith(run_id)] if os.path.isdir(GPS_DIR) else []
-    if gps_files:
-        content = open(os.path.join(GPS_DIR, gps_files[0]), "r", encoding="utf-8").read()
-        return Response(
-            content=content,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={run_id}_gps.csv"},
-        )
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GPS data not found")
+    gps_path = _resolve_run_artifact(run_id, "gps_trajectory.csv") or _find_run_artifact(
+        run_id, (".csv", ".gpx")
+    )
+    if gps_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GPS data not found")
+
+    content = open(gps_path, "r", encoding="utf-8", errors="replace").read()
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={run_id}_gps.csv"},
+    )
 
 
 @router.get("/download/iri-plot/{run_id}", response_class=FileResponse)
 async def download_iri_plot(run_id: str):
     """Serve the IRI plot image for a run."""
-    for ext in (".png", ".jpg", ".jpeg", ".svg"):
-        for search_dir in (PLOTS_DIR, os.path.join(ANALYTICS_DIR, run_id)):
-            candidate = os.path.join(search_dir, f"{run_id}{ext}")
-            if os.path.isfile(candidate):
-                return FileResponse(candidate, media_type="image/png", filename=os.path.basename(candidate))
-    # Try matching by prefix
-    if os.path.isdir(PLOTS_DIR):
-        for f in sorted(os.listdir(PLOTS_DIR)):
-            if f.startswith(run_id) and f.endswith((".png", ".jpg", ".jpeg", ".svg")):
-                return FileResponse(os.path.join(PLOTS_DIR, f), media_type="image/png", filename=f)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IRI plot not found")
+    plot_path = _resolve_run_artifact(run_id, "iri_plot.png") or _find_run_artifact(
+        run_id, (".png", ".jpg", ".jpeg", ".svg")
+    )
+    if plot_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IRI plot not found")
+    return FileResponse(plot_path, media_type="image/png", filename=f"{run_id}_iri_plot.png")

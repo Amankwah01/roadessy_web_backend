@@ -5,15 +5,20 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import get_principal
 from app.database.session import get_db
 from app.models.calibration import CalibrationProfile
 from app.schemas.calibration import (
-    CalibrationProfileSaveRequest,
-    CalibrationProfileResponse,
     CalibrationProfileListResponse,
+    CalibrationProfileSaveRequest,
 )
 
 router = APIRouter(prefix="/calibration", tags=["calibration"])
+
+
+def _effective_user_id(principal: dict, submitted_user_id: str) -> str:
+    """Prefer the verified Clerk identity over the client-supplied user id."""
+    return principal.get("user_id") or submitted_user_id
 
 
 def _parse_json_field(raw: Any) -> Any:
@@ -36,12 +41,15 @@ def _format_datetime(dt: Any) -> str | None:
 def save_calibration_profile(
     request: CalibrationProfileSaveRequest,
     db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
 ):
+    # Never let one Clerk user read or overwrite another user's calibration.
+    user_id = _effective_user_id(principal, request.user_id)
     try:
         profile = (
             db.query(CalibrationProfile)
             .filter(
-                CalibrationProfile.user_id == request.user_id,
+                CalibrationProfile.user_id == user_id,
                 CalibrationProfile.device_name == request.device_name,
             )
             .first()
@@ -53,8 +61,12 @@ def save_calibration_profile(
         intrinsics = metadata.get("intrinsics") or {}
 
         if profile is None:
+            # The verified user id, not the submitted one. Writing the submitted
+            # id here would let one Clerk user file a profile under another's
+            # name, and the read path below filters on the verified id, so the
+            # profile would simply be invisible to the person who saved it.
             profile = CalibrationProfile(
-                user_id=request.user_id,
+                user_id=user_id,
                 device_name=request.device_name,
             )
             db.add(profile)
@@ -76,6 +88,8 @@ def save_calibration_profile(
             "reprojection_error": summary.get("reprojection_error"),
             "used_images": summary.get("used_images", raw_metadata.get("used_images")),
             "uploaded_images": summary.get("uploaded_images", raw_metadata.get("uploaded_images")),
+            "camera_height_meters": metadata.get("camera_height_meters"),
+            "camera_tilt_degrees": metadata.get("camera_tilt_degrees"),
         }
         for field, value in values.items():
             if value is not None:
@@ -106,11 +120,16 @@ def save_calibration_profile(
 
 
 @router.get("/devices/{user_id}", response_model=CalibrationProfileListResponse)
-def list_calibration_devices(user_id: str, db: Session = Depends(get_db)):
+def list_calibration_devices(
+    user_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
+):
+    effective_user_id = _effective_user_id(principal, user_id)
     try:
         profiles = (
             db.query(CalibrationProfile)
-            .filter(CalibrationProfile.user_id == user_id)
+            .filter(CalibrationProfile.user_id == effective_user_id)
             .order_by(CalibrationProfile.updated_at.desc())
             .all()
         )
@@ -125,12 +144,14 @@ def list_calibration_devices(user_id: str, db: Session = Depends(get_db)):
                     "checkerboard_inner_corners": _parse_json_field(
                         getattr(p, "checkerboard_inner_corners", None)
                     ),
-                    "square_size_meters": getattr(p, "square_size_meters", None),
-                    "fx": getattr(p, "fx", None),
-                    "fy": getattr(p, "fy", None),
-                    "cx": getattr(p, "cx", None),
-                    "cy": getattr(p, "cy", None),
-                    "distortion_coefficients": _parse_json_field(
+"square_size_meters": getattr(p, "square_size_meters", None),
+                "fx": getattr(p, "fx", None),
+                "fy": getattr(p, "fy", None),
+                "cx": getattr(p, "cx", None),
+                "cy": getattr(p, "cy", None),
+                "camera_height_meters": getattr(p, "camera_height_meters", None),
+                "camera_tilt_degrees": getattr(p, "camera_tilt_degrees", None),
+                "distortion_coefficients": _parse_json_field(
                         getattr(p, "distortion_coefficients", None)
                     ),
                     "reprojection_error": getattr(p, "reprojection_error", None),
@@ -154,12 +175,14 @@ def get_calibration_profile(
     user_id: str,
     device_name: str,
     db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
 ):
+    effective_user_id = _effective_user_id(principal, user_id)
     try:
         profile = (
             db.query(CalibrationProfile)
             .filter(
-                CalibrationProfile.user_id == user_id,
+                CalibrationProfile.user_id == effective_user_id,
                 CalibrationProfile.device_name == device_name,
             )
             .first()

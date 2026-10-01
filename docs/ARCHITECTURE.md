@@ -58,11 +58,11 @@ Road ID, owner, name, LineString geometry, width, optional buffer, and creation 
 
 ### External route CSV
 
-Accepted canonical columns are `time`/`Timestamp`/`RecIntvl`/`GPSTime` plus `lat`/`Latitude` and `lon`/`Longitude`. Headers are trimmed. Numeric `Timestamp` is preferred over human-readable `Global_Second`. Times are normalized relative to the first GPS row.
+Accepted canonical columns are `time`/`Timestamp`/`RecIntvl`/`GPSTime` plus `lat`/`Latitude` and `lon`/`Longitude`. Headers are trimmed. The time axis is chosen by inspecting column *values* rather than by name, because the logger exports name their two time columns for each other's contents (`Global_Second` holds a wall clock, `Timestamp` holds elapsed time). Plain seconds are preferred over an `H:MM:SS` elapsed clock, which is preferred over a parseable datetime. Times are then rebased onto the first GPS row, so a session counter starting in the thousands lines up with a video timestamp measured from frame zero.
 
 ### Vibration CSV with GPS
 
-The common logger format contains `Timestamp` as a human-readable date, `Latitude`, `Longitude`, `SpeedKmh` or `Speed`, and `RecIntvl`. IRI uses `RecIntvl` for elapsed sensor time. GPS loading uses `Timestamp` only when the selected source is CSV and no higher-priority time field is present; for this logger, use the external GPS path or `vib_csv` explicitly when GPS is embedded in vibration data.
+The common logger format contains `Timestamp` as a human-readable date, `Latitude`, `Longitude`, `SpeedKmh` or `Speed`, and `RecIntvl`. IRI uses `RecIntvl` for elapsed sensor time, which is the one case where the time axis is integrated from intervals rather than read from a column. GPS loading uses `Timestamp` only when the selected source is CSV and no higher-priority time field is present; for this logger, use the external GPS path or `vib_csv` explicitly when GPS is embedded in vibration data.
 
 ## IRI algorithm as implemented
 
@@ -79,6 +79,38 @@ The common logger format contains `Timestamp` as a human-readable date, `Latitud
 - Segmentation: 50 m.
 - Classification: Ghana Road Condition Survey Manual 2023 labels currently represented by the code.
 
+## Putting the two 50 m tables on the same road
+
+The IRI table and the defect table are both indexed by distance, but the distances
+come from two loggers started by hand. On the KNUST Obuasi 17:12:30 trip the
+camera's GPS begins 470 m before the vibration logger's, so every detection's
+chainage reads 470 m high relative to the IRI's and section 2 of one table
+describes a different 50 m of road than section 2 of the other.
+
+`app/services/fusion/alignment.py` resolves this by physical position rather than
+by a constant shift. Each detection is projected onto the measured track by its
+coordinates, and its `chainage_m` becomes the distance along that track. The
+camera's own distance is kept as `vision_chainage_m`, and `chainage_source` says
+which frame a value is in (`gps_aligned`, `off_track`, `unaligned`, or the
+GPS-derived chainage when no track is available).
+
+Behaviour when alignment is impossible:
+
+- No measured track, or nothing could be placed: the result carries
+  `alignment.aligned = false` and a `reason`. The tables are still produced, but
+  the result says their section indices are not comparable.
+- A detection that cannot be placed is held out of the per-section tables rather
+  than bucketed by its vision chainage, which would assert a section on no
+  evidence. It still counts toward the survey's overall PCI, which needs no
+  origin, and `alignment.unplaced` reports how many.
+- A track with any step above 200 m between consecutive fixes is refused as not
+  continuous, because its cumulative distance includes straight lines across
+  country rather than driven road.
+- `alignment.track_quality` carries the frame's own statistics
+  (`contiguous`, `teleport_count`, `worst_step_m`, `median_step_m`,
+  `frozen_fraction`) into the result, so a confident-looking table still shows
+  the quality of the chainage it was cut in.
+
 ## Frontend behavior
 
 - Dashboard loads survey GeoJSON and defects.
@@ -90,6 +122,14 @@ The common logger format contains `Timestamp` as a human-readable date, `Latitud
 
 ## Known architectural risks
 
+- The vibration logger's GPS is not a usable chainage source in the KNUST
+  Kumasi-to-Obuasi data: its median step between fixes is 0.00 m on all seven
+  trips, meaning it holds a stale fix and then jumps, and between 0.2 km and
+  13.1 km of each trip's apparent distance comes from those jumps. Every 50 m
+  IRI section is cut from a distance integral that includes this, so stored
+  `IRISegment` chainages are affected. The camera's GPS over the same drives is
+  clean (no step above 62 m). Which logger should define the survey frame is
+  unresolved, and changing it re-bases every stored IRI number.
 - Duplicate primary and modular pipelines can diverge.
 - Import-time `Base.metadata.create_all` competes with Alembic ownership.
 - SQLite cannot provide equivalent PostGIS behavior.

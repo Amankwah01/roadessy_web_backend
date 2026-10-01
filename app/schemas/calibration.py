@@ -13,6 +13,8 @@ class CalibrationProfileResponse(BaseModel):
     cx: float | None = None
     cy: float | None = None
     distortion_coefficients: list[float] | None = None
+    camera_height_meters: float | None = None
+    camera_tilt_degrees: float | None = None
     reprojection_error: float | None = None
     used_images: int | None = None
     uploaded_images: int | None = None

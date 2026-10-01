@@ -2,7 +2,6 @@
 import datetime
 
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
-from sqlalchemy.orm import declarative_base
 
 from app.database.session import Base
 
@@ -23,5 +22,7 @@ class CalibrationProfile(Base):
     reprojection_error = Column(Float)
     used_images = Column(Integer)
     uploaded_images = Column(Integer)
+    camera_height_meters = Column(Float)
+    camera_tilt_degrees = Column(Float)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

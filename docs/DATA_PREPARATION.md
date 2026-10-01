@@ -19,7 +19,24 @@ Global_Second,Timestamp,Latitude,Longitude,Speed
 2026:08:04 07:55:55,3448,6.534238,-1.573155,14
 ```
 
-Use the numeric `Timestamp` as the elapsed time. `Global_Second` is only a display timestamp.
+Note that the two time columns are named for each other's contents:
+`Global_Second` carries a wall clock and `Timestamp` carries the elapsed time.
+The loader therefore picks the time axis by inspecting column *values*, not by
+trusting the header name, and it accepts all three forms these logger exports
+use — plain seconds, an `H:MM:SS` elapsed clock, and a full datetime:
+
+| Written as | Example |
+| --- | --- |
+| Plain seconds | `3428` |
+| Elapsed clock | `0:57:08` |
+| Wall clock | `2026:08:04 07:55:35` |
+
+The chosen axis is rebased to start at zero, because video time is measured from
+the first frame and a logger counter that starts at 8241 s would otherwise place
+the whole track outside the video's timeline, resolving every detection to the
+first fix. In this dataset the same trip is exported both ways — as
+`3428`-style seconds and as `0:00:00`-style clock — and both loaders now produce
+an identical track from the two files.
 
 ## Accepted vibration CSV shape
 
@@ -38,7 +55,8 @@ The human-readable `Timestamp` is not used to reconstruct IRI time. `RecIntvl` i
 - Drive forward continuously long enough to cover the road; avoid long stationary periods in the survey section.
 - Do not use a vehicle that is only shaking while parked as an IRI survey.
 - Check that latitude/longitude are decimal degrees and longitude is negative for this Ghana route.
-- Check that GPS time increases and does not reset midway.
+- Check that GPS time increases and does not reset midway. A reset to zero mid-file will be read as a time going backwards.
+- Check that the time column is the one you think it is: the loader trusts values over headers, so a CSV whose seconds were written as `0:00:00` will be read correctly while one with a *missing* time column will be read on an invented 1 Hz axis.
 - Check that speed units are labelled; `SpeedKmh` is converted automatically.
 - Remove empty rows, broken coordinates, duplicated time rows, and accidental spreadsheet formatting.
 - Keep the original files unchanged as evidence.

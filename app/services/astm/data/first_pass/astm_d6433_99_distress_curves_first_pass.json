@@ -1,0 +1,1492 @@
+{
+  "standard": "ASTM D6433-99",
+  "pavement_type": "AC",
+  "source": "User-supplied ASTM D6433-99 PDF, Appendix X3",
+  "status": "UNVERIFIED_FIRST_PASS_DIGITIZATION",
+  "important_note": "These are manually read anchor points from the raster scan, not an official ASTM numerical table. They are provided for implementation scaffolding and must be visually/independently validated before thesis or production use.",
+  "curve_interpolation_recommendation": "linear interpolation in log10(density) versus DV between validated anchor points",
+  "figures": {
+    "X3.1": {
+      "distress": "alligator_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 13
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 55
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 90
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 9
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 40
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 80
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 60
+          }
+        ]
+      }
+    },
+    "X3.2": {
+      "distress": "bleeding",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 72
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 9
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 40
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 0.8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 20
+          }
+        ]
+      }
+    },
+    "X3.3": {
+      "distress": "block_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 70
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 12
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 42
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 27
+          }
+        ]
+      }
+    },
+    "X3.4": {
+      "distress": "bumps_and_sags",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 50
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 100
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 65
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 12,
+            "deduct_value": 45
+          }
+        ]
+      }
+    },
+    "X3.5": {
+      "distress": "bumps_and_sags_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 35
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 75
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 100
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 75
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 38
+          }
+        ]
+      }
+    },
+    "X3.6": {
+      "distress": "corrugation",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 40
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 65
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 95
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 75
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 40
+          }
+        ]
+      }
+    },
+    "X3.7": {
+      "distress": "depression",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 75
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 35
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 60
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 48
+          }
+        ]
+      }
+    },
+    "X3.8": {
+      "distress": "edge_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 40
+          },
+          {
+            "density_percent": 20,
+            "deduct_value": 45
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 20,
+            "deduct_value": 30
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 20,
+            "deduct_value": 18
+          }
+        ]
+      }
+    },
+    "X3.9": {
+      "distress": "edge_cracking_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 48
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 28
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 16
+          }
+        ]
+      }
+    },
+    "X3.10": {
+      "distress": "joint_reflection_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 60
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 75
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 45
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 28
+          }
+        ]
+      }
+    },
+    "X3.11": {
+      "distress": "joint_reflection_cracking_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 72
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 18
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 42
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 25
+          }
+        ]
+      }
+    },
+    "X3.12": {
+      "distress": "lane_shoulder_drop_off",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 15,
+            "deduct_value": 45
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 15,
+            "deduct_value": 30
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 15,
+            "deduct_value": 18
+          }
+        ]
+      }
+    },
+    "X3.13": {
+      "distress": "lane_shoulder_drop_off_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 60,
+            "deduct_value": 45
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 12
+          },
+          {
+            "density_percent": 60,
+            "deduct_value": 25
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 60,
+            "deduct_value": 17
+          }
+        ]
+      }
+    },
+    "X3.14": {
+      "distress": "longitudinal_transverse_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 60
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 85
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 45
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0.2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 28
+          }
+        ]
+      }
+    },
+    "X3.15": {
+      "distress": "longitudinal_transverse_cracking_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 35
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 90
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 45
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 28
+          }
+        ]
+      }
+    },
+    "X3.16": {
+      "distress": "patching_utility_cut_patching",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 50
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 82
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 60
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 35
+          }
+        ]
+      }
+    },
+    "X3.17": {
+      "distress": "polished_aggregate",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "N": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 0
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 20
+          }
+        ]
+      }
+    },
+    "X3.18": {
+      "distress": "potholes",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.01,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 0.1,
+            "deduct_value": 55
+          },
+          {
+            "density_percent": 0.5,
+            "deduct_value": 100
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.01,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 0.1,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 1.2,
+            "deduct_value": 100
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.01,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 0.1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 50
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 100
+          }
+        ]
+      }
+    },
+    "X3.19": {
+      "distress": "potholes_metric",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 55
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 100
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 80
+          },
+          {
+            "density_percent": 20,
+            "deduct_value": 100
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 50
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 100
+          }
+        ]
+      }
+    },
+    "X3.20": {
+      "distress": "railroad_crossing",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 65
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 80
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 35
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 50
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 20
+          }
+        ]
+      }
+    },
+    "X3.21": {
+      "distress": "rutting",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 60
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 90
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 12
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 40
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 70
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 50
+          }
+        ]
+      }
+    },
+    "X3.22": {
+      "distress": "shoving",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 12
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 55
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 90
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 7
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 30
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 70
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 15
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 40
+          }
+        ]
+      }
+    },
+    "X3.23": {
+      "distress": "slippage_cracking",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 6
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 70
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 90
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 70
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 1
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 5
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 50
+          }
+        ]
+      }
+    },
+    "X3.24": {
+      "distress": "swell",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 1,
+            "deduct_value": 35
+          },
+          {
+            "density_percent": 5,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 72
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 1,
+            "deduct_value": 12
+          },
+          {
+            "density_percent": 5,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 50
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 1,
+            "deduct_value": 3
+          },
+          {
+            "density_percent": 5,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 30,
+            "deduct_value": 22
+          }
+        ]
+      }
+    },
+    "X3.25": {
+      "distress": "weathering_raveling",
+      "x_axis": "density_percent",
+      "x_scale": "log10",
+      "y_axis": "deduct_value",
+      "severity_curves": {
+        "H": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 8
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 20
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 45
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 80
+          }
+        ],
+        "M": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 25
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 45
+          }
+        ],
+        "L": [
+          {
+            "density_percent": 0.1,
+            "deduct_value": 2
+          },
+          {
+            "density_percent": 1,
+            "deduct_value": 4
+          },
+          {
+            "density_percent": 10,
+            "deduct_value": 10
+          },
+          {
+            "density_percent": 100,
+            "deduct_value": 16
+          }
+        ]
+      }
+    }
+  }
+}

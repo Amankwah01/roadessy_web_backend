@@ -3,8 +3,9 @@ import datetime
 import uuid
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from app.database.session import Base, DATABASE_URL
 
@@ -22,6 +23,8 @@ class SurveyRun(Base):
     name = Column(String, nullable=False)
     user_id = Column(String, nullable=False, index=True)
     organisation_id = Column(String, nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=True, index=True)
+    road_id = Column(UUID(as_uuid=True), ForeignKey("roads.id"), nullable=True, index=True)
     
     # Track 1: ASTM
     astm_pci = Column(Float, nullable=True)
@@ -48,6 +51,15 @@ class SurveyRun(Base):
     model_path = Column(String)
     processing_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Soft delete: removing a run from the owner's dashboard leaves the row so
+    # the admin console can still account for the upload, and so it can be
+    # un-removed. Stored artifacts are deliberately not touched.
+    removed_at = Column(DateTime, nullable=True, index=True)
+    
+    # Relationships
+    project = relationship("Project", backref="runs")
+    road = relationship("Road", backref="runs")
 
 
 class MapMatchingRun(Base):
@@ -125,5 +137,49 @@ class TrackedDefect(Base):
     yolo_class_id = Column(Integer, nullable=True)
     confidence = Column(Float, nullable=True)
     chainage_m = Column(Float, nullable=True)
+    # Station along the matched road, measured from the road's own beginning.
+    # `chainage_m` above is distance since this run started, so it is zero
+    # wherever the vehicle was put on the road and cannot be compared with
+    # another survey's. This one can, and `chainage_offset_m` is the difference
+    # between them for anyone who needs to relate the two.
+    station_m = Column(Float, nullable=True, index=True)
+    station_road_id = Column(String, nullable=True)
+    station_source = Column(String, nullable=True)
+    chainage_offset_m = Column(Float, nullable=True)
     geom_location = _geometry_column("POINT", 4326)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    org_id = Column(String, nullable=False, index=True)
+    org_name = Column(String, nullable=False)
+    visibility = Column(String, default="PERSONAL")  # PERSONAL or TEAM
+    team_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    team_name = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    created_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class Road(Base):
+    __tablename__ = "roads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    project_name = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    start_node = Column(String, nullable=True)
+    end_node = Column(String, nullable=True)
+    surface_type = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    road_geom = _geometry_column("LINESTRING", 4326)
+    created_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_road_name_per_project"),)

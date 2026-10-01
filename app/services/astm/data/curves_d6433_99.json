@@ -1,0 +1,8967 @@
+{
+ "standard": "ASTM D6433",
+ "edition": "D6433-99",
+ "description": "Deduct-value curve data for asphalt concrete pavements. The distress curves are first-pass anchor points read off the published figures in the supplied standard; they are PROVISIONAL because that read has not been verified. The X3.26 correction curves are still placeholder fits.",
+ "authoritative": false,
+ "provisional": true,
+ "source": {
+  "document": "ASTM D 6433-99, Standard Practice for Roads and Parking Lots Pavement Condition Index Surveys",
+  "figures": "Appendix X3, Figs. X3.1-X3.25",
+  "digitization_file": "astm_d6433_99_distress_curves_first_pass.json",
+  "digitization_csv": "astm_d6433_99_distress_curves_first_pass.csv",
+  "digitization_sha256": {
+   "astm_d6433_99_distress_curves_first_pass.json": "f0ee7f01254d186e273759dbd8dd55701d64e97d960710ee3f8c1abcccc2411e",
+   "astm_d6433_99_distress_curves_first_pass.csv": "362ae9c6dd8c4b986e81a2dddc4cb679ec826d2e9e1202dc3e80d5f77994f74b"
+  },
+  "cdv_validation_file": "x3_26_cdv_validation_points.csv",
+  "cdv_validation_sha256": "5a3972d1274b390c6cb2d831801ddb56f802dd1b165b7691304af06698188685",
+  "package_readme": "README.md",
+  "package_readme_sha256": "f2da4785f842609c54afdf0e45676be3e0d95779761dc74b742f9d39ea1d975d",
+  "extraction_method": "manual first-pass read of the raster figures",
+  "status": "UNVERIFIED_FIRST_PASS_DIGITIZATION",
+  "verified": false
+ },
+ "cdv_figure_note": "The AC corrected-deduct-value curve is Fig. X3.26. The standard's own cross-reference at 9.5.5.3 says 'Fig. X4.15 in Appendix X3', but X4.15 is Railroad Crossing in the PCC appendix; the cross-reference is wrong in the 1999 edition. Fig. X3.26 is the AC corrected-deduct-value curve. These are still the MDPI placeholder fits and are the weakest numbers in this dataset: the vendored x3_26_cdv_validation_points.csv shows them reading 3 to 66 points high, and 100 where the standard's example says 58.",
+ "distress_curves": [
+  {
+   "distress": "alligator_cracking",
+   "figure": "X3.1",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.1 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 13.0
+     },
+     {
+      "density": 1.0,
+      "dv": 30.0
+     },
+     {
+      "density": 10.0,
+      "dv": 55.0
+     },
+     {
+      "density": 100.0,
+      "dv": 90.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 9.0
+     },
+     {
+      "density": 1.0,
+      "dv": 20.0
+     },
+     {
+      "density": 10.0,
+      "dv": 40.0
+     },
+     {
+      "density": 100.0,
+      "dv": 80.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 5.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 25.0
+     },
+     {
+      "density": 100.0,
+      "dv": 60.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "bleeding",
+   "figure": "X3.2",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.2 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 1.0
+     },
+     {
+      "density": 1.0,
+      "dv": 5.0
+     },
+     {
+      "density": 10.0,
+      "dv": 15.0
+     },
+     {
+      "density": 100.0,
+      "dv": 72.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 0.5
+     },
+     {
+      "density": 1.0,
+      "dv": 2.0
+     },
+     {
+      "density": 10.0,
+      "dv": 9.0
+     },
+     {
+      "density": 100.0,
+      "dv": 40.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 0.2
+     },
+     {
+      "density": 1.0,
+      "dv": 0.8
+     },
+     {
+      "density": 10.0,
+      "dv": 4.0
+     },
+     {
+      "density": 100.0,
+      "dv": 20.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "corrugation",
+   "figure": "X3.6",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.6 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 10.0
+     },
+     {
+      "density": 1.0,
+      "dv": 40.0
+     },
+     {
+      "density": 10.0,
+      "dv": 65.0
+     },
+     {
+      "density": 100.0,
+      "dv": 95.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 5.0
+     },
+     {
+      "density": 1.0,
+      "dv": 20.0
+     },
+     {
+      "density": 10.0,
+      "dv": 45.0
+     },
+     {
+      "density": 100.0,
+      "dv": 75.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 1.0
+     },
+     {
+      "density": 1.0,
+      "dv": 8.0
+     },
+     {
+      "density": 10.0,
+      "dv": 20.0
+     },
+     {
+      "density": 100.0,
+      "dv": 40.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "depression",
+   "figure": "X3.7",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.7 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 10.0
+     },
+     {
+      "density": 1.0,
+      "dv": 15.0
+     },
+     {
+      "density": 10.0,
+      "dv": 45.0
+     },
+     {
+      "density": 100.0,
+      "dv": 75.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 6.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 35.0
+     },
+     {
+      "density": 100.0,
+      "dv": 60.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 7.0
+     },
+     {
+      "density": 10.0,
+      "dv": 25.0
+     },
+     {
+      "density": 100.0,
+      "dv": 48.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "longitudinal_cracking",
+   "figure": "X3.15",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.15 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 3.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 35.0
+     },
+     {
+      "density": 100.0,
+      "dv": 90.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 6.0
+     },
+     {
+      "density": 10.0,
+      "dv": 20.0
+     },
+     {
+      "density": 100.0,
+      "dv": 45.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 1.0
+     },
+     {
+      "density": 1.0,
+      "dv": 3.0
+     },
+     {
+      "density": 10.0,
+      "dv": 10.0
+     },
+     {
+      "density": 100.0,
+      "dv": 28.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "transverse_cracking",
+   "figure": "X3.15",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.15 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 3.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 35.0
+     },
+     {
+      "density": 100.0,
+      "dv": 90.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 6.0
+     },
+     {
+      "density": 10.0,
+      "dv": 20.0
+     },
+     {
+      "density": 100.0,
+      "dv": 45.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 1.0
+     },
+     {
+      "density": 1.0,
+      "dv": 3.0
+     },
+     {
+      "density": 10.0,
+      "dv": 10.0
+     },
+     {
+      "density": 100.0,
+      "dv": 28.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "patching",
+   "figure": "X3.16",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.16 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 7.0
+     },
+     {
+      "density": 1.0,
+      "dv": 15.0
+     },
+     {
+      "density": 10.0,
+      "dv": 50.0
+     },
+     {
+      "density": 100.0,
+      "dv": 82.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 4.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 25.0
+     },
+     {
+      "density": 100.0,
+      "dv": 60.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 6.0
+     },
+     {
+      "density": 10.0,
+      "dv": 15.0
+     },
+     {
+      "density": 100.0,
+      "dv": 35.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "potholes",
+   "figure": "X3.19",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.19 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 20.0
+     },
+     {
+      "density": 1.0,
+      "dv": 55.0
+     },
+     {
+      "density": 10.0,
+      "dv": 100.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 8.0
+     },
+     {
+      "density": 1.0,
+      "dv": 25.0
+     },
+     {
+      "density": 10.0,
+      "dv": 80.0
+     },
+     {
+      "density": 20.0,
+      "dv": 100.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 3.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 50.0
+     },
+     {
+      "density": 100.0,
+      "dv": 100.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "rutting",
+   "figure": "X3.21",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.21 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 5.0
+     },
+     {
+      "density": 1.0,
+      "dv": 25.0
+     },
+     {
+      "density": 10.0,
+      "dv": 60.0
+     },
+     {
+      "density": 100.0,
+      "dv": 90.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 12.0
+     },
+     {
+      "density": 10.0,
+      "dv": 40.0
+     },
+     {
+      "density": 100.0,
+      "dv": 70.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 1.0
+     },
+     {
+      "density": 1.0,
+      "dv": 5.0
+     },
+     {
+      "density": 10.0,
+      "dv": 25.0
+     },
+     {
+      "density": 100.0,
+      "dv": 50.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "shoving",
+   "figure": "X3.22",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.22 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 8.0
+     },
+     {
+      "density": 1.0,
+      "dv": 12.0
+     },
+     {
+      "density": 10.0,
+      "dv": 55.0
+     },
+     {
+      "density": 100.0,
+      "dv": 90.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 4.0
+     },
+     {
+      "density": 1.0,
+      "dv": 7.0
+     },
+     {
+      "density": 10.0,
+      "dv": 30.0
+     },
+     {
+      "density": 100.0,
+      "dv": 70.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 4.0
+     },
+     {
+      "density": 10.0,
+      "dv": 15.0
+     },
+     {
+      "density": 100.0,
+      "dv": 40.0
+     }
+    ]
+   }
+  },
+  {
+   "distress": "weathering_raveling",
+   "figure": "X3.25",
+   "x_scale": "log10",
+   "x_axis": "distress_density_percent",
+   "y_axis": "deduct_value",
+   "method": "first_pass_digitization_anchor_points",
+   "provisional": true,
+   "verification": "unverified_first_pass",
+   "note": "Anchor points read off Fig. X3.25 of the supplied ASTM D6433-99 raster scan, status UNVERIFIED_FIRST_PASS_DIGITIZATION. They are a read of the published graph rather than a fit to it, so they are usable, but three to four points per curve is coarse: a detection between anchors is interpolated, not measured. Confirm against the figure. The density axis is treated as logarithmic, which the standard's figures are drawn on. The vendored package asks for this to be validated first, and it has not been, so the exposure is measured rather than assumed: reading these same anchors on a linear axis instead changes the deduct value by up to 14.8 points, and PCI moves one-for-one with CDV. The evidence for the axis is in the anchors themselves -- 255 of 284 sit exactly on a power of ten, which a linear grid would not produce.",
+   "severities": [
+    "H",
+    "L",
+    "M"
+   ],
+   "curves": {
+    "H": [
+     {
+      "density": 0.1,
+      "dv": 8.0
+     },
+     {
+      "density": 1.0,
+      "dv": 20.0
+     },
+     {
+      "density": 10.0,
+      "dv": 45.0
+     },
+     {
+      "density": 100.0,
+      "dv": 80.0
+     }
+    ],
+    "M": [
+     {
+      "density": 0.1,
+      "dv": 4.0
+     },
+     {
+      "density": 1.0,
+      "dv": 10.0
+     },
+     {
+      "density": 10.0,
+      "dv": 25.0
+     },
+     {
+      "density": 100.0,
+      "dv": 45.0
+     }
+    ],
+    "L": [
+     {
+      "density": 0.1,
+      "dv": 2.0
+     },
+     {
+      "density": 1.0,
+      "dv": 4.0
+     },
+     {
+      "density": 10.0,
+      "dv": 10.0
+     },
+     {
+      "density": 100.0,
+      "dv": 16.0
+     }
+    ]
+   }
+  }
+ ],
+ "cdv_curves": {
+  "1": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.4931
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.9925
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.4981
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 2.01
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 2.5281
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 3.0525
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 3.5831
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 4.12
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 4.6631
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 5.2125
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 5.7681
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 6.33
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 6.8981
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 7.4725
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 8.0531
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 8.64
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 9.2331
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 9.8325
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 10.4381
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 11.05
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 11.6681
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 12.2925
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 12.9231
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 13.56
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 14.2031
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 14.8525
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 15.5081
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 16.17
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 16.8381
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 17.5125
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 18.1931
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 18.88
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 19.5731
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 20.2725
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 20.9781
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 21.69
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 22.4081
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 23.1325
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 23.8631
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 24.6
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 25.3431
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 26.0925
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 26.8481
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 27.61
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 28.3781
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 29.1525
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 29.9331
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 30.72
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 31.5131
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 32.3125
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 33.1181
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 33.93
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 34.7481
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 35.5725
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 36.4031
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 37.24
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 38.0831
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 38.9325
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 39.7881
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 40.65
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 41.5181
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 42.3925
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 43.2731
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 44.16
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 45.0531
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 45.9525
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 46.8581
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 47.77
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 48.6881
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 49.6125
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 50.5431
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 51.48
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 52.4231
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 53.3725
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 54.3281
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 55.29
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 56.2581
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 57.2325
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 58.2131
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 59.2
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 60.1931
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 61.1925
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 62.1981
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 63.21
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 64.2281
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 65.2525
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 66.2831
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 67.32
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 68.3631
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 69.4125
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 70.4681
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 71.53
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 72.5981
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 73.6725
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 74.7531
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 75.84
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 76.9331
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 78.0325
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 79.1381
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 80.25
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 81.3681
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 82.4925
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 83.6231
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 84.76
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 85.9031
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 87.0525
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 88.2081
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 89.37
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 90.5381
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 91.7125
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 92.8931
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 94.08
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 95.2731
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 96.4725
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 97.6781
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 98.89
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "2": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.4931
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.9925
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.4981
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 2.01
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 2.5281
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 3.0525
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 3.5831
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 4.12
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 4.6631
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 5.2125
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 5.7681
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 6.33
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 6.8981
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 7.4725
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 8.0531
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 8.64
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 9.2331
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 9.8325
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 10.4381
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 11.05
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 11.6681
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 12.2925
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 12.9231
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 13.56
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 14.2031
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 14.8525
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 15.5081
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 16.17
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 16.8381
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 17.5125
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 18.1931
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 18.88
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 19.5731
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 20.2725
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 20.9781
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 21.69
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 22.4081
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 23.1325
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 23.8631
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 24.6
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 25.3431
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 26.0925
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 26.8481
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 27.61
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 28.3781
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 29.1525
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 29.9331
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 30.72
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 31.5131
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 32.3125
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 33.1181
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 33.93
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 34.7481
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 35.5725
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 36.4031
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 37.24
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 38.0831
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 38.9325
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 39.7881
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 40.65
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 41.5181
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 42.3925
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 43.2731
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 44.16
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 45.0531
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 45.9525
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 46.8581
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 47.77
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 48.6881
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 49.6125
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 50.5431
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 51.48
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 52.4231
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 53.3725
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 54.3281
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 55.29
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 56.2581
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 57.2325
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 58.2131
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 59.2
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 60.1931
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 61.1925
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 62.1981
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 63.21
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 64.2281
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 65.2525
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 66.2831
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 67.32
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 68.3631
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 69.4125
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 70.4681
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 71.53
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 72.5981
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 73.6725
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 74.7531
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 75.84
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 76.9331
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 78.0325
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 79.1381
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 80.25
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 81.3681
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 82.4925
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 83.6231
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 84.76
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 85.9031
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 87.0525
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 88.2081
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 89.37
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 90.5381
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 91.7125
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 92.8931
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 94.08
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 95.2731
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 96.4725
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 97.6781
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 98.89
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "3": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.4725
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.95
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.4325
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.92
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 2.4125
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 2.91
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 3.4125
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 3.92
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 4.4325
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 4.95
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 5.4725
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 6.0
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 6.5325
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 7.07
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 7.6125
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 8.16
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 8.7125
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 9.27
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 9.8325
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 10.4
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 10.9725
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 11.55
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 12.1325
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 12.72
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 13.3125
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 13.91
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 14.5125
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 15.12
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 15.7325
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 16.35
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 16.9725
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 17.6
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 18.2325
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 18.87
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 19.5125
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 20.16
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 20.8125
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 21.47
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 22.1325
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 22.8
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 23.4725
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 24.15
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 24.8325
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 25.52
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 26.2125
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 26.91
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 27.6125
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 28.32
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 29.0325
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 29.75
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 30.4725
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 31.2
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 31.9325
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 32.67
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 33.4125
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 34.16
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 34.9125
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 35.67
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 36.4325
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 37.2
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 37.9725
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 38.75
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 39.5325
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 40.32
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 41.1125
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 41.91
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 42.7125
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 43.52
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 44.3325
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 45.15
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 45.9725
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 46.8
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 47.6325
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 48.47
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 49.3125
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 50.16
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 51.0125
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 51.87
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 52.7325
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 53.6
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 54.4725
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 55.35
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 56.2325
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 57.12
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 58.0125
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 58.91
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 59.8125
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 60.72
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 61.6325
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 62.55
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 63.4725
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 64.4
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 65.3325
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 66.27
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 67.2125
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 68.16
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 69.1125
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 70.07
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 71.0325
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 72.0
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 72.9725
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 73.95
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 74.9325
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 75.92
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 76.9125
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 77.91
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 78.9125
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 79.92
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 80.9325
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 81.95
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 82.9725
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 84.0
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 85.0325
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 86.07
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 87.1125
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 88.16
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 89.2125
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 90.27
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 91.3325
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 92.4
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 93.4725
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 94.55
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 95.6325
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 96.72
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 97.8125
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 98.91
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "4": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.4421
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.8885
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.3391
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.794
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 2.2531
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 2.7165
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 3.1841
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 3.656
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 4.1321
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 4.6125
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 5.0971
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 5.586
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 6.0791
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 6.5765
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 7.0781
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 7.584
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 8.0941
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 8.6085
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 9.1271
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 9.65
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 10.1771
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 10.7085
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 11.2441
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 11.784
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 12.3281
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 12.8765
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 13.4291
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 13.986
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 14.5471
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 15.1125
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 15.6821
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 16.256
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 16.8341
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 17.4165
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 18.0031
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 18.594
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 19.1891
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 19.7885
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 20.3921
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 21.0
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 21.6121
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 22.2285
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 22.8491
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 23.474
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 24.1031
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 24.7365
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 25.3741
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 26.016
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 26.6621
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 27.3125
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 27.9671
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 28.626
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 29.2891
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 29.9565
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 30.6281
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 31.304
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 31.9841
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 32.6685
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 33.3571
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 34.05
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 34.7471
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 35.4485
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 36.1541
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 36.864
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 37.5781
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 38.2965
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 39.0191
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 39.746
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 40.4771
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 41.2125
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 41.9521
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 42.696
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 43.4441
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 44.1965
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 44.9531
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 45.714
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 46.4791
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 47.2485
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 48.0221
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 48.8
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 49.5821
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 50.3685
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 51.1591
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 51.954
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 52.7531
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 53.5565
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 54.3641
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 55.176
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 55.9921
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 56.8125
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 57.6371
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 58.466
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 59.2991
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 60.1365
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 60.9781
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 61.824
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 62.6741
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 63.5285
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 64.3871
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 65.25
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 66.1171
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 66.9885
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 67.8641
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 68.744
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 69.6281
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 70.5165
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 71.4091
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 72.306
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 73.2071
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 74.1125
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 75.0221
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 75.936
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 76.8541
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 77.7765
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 78.7031
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 79.634
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 80.5691
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 81.5085
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 82.4521
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 83.4
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 84.3521
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 85.3085
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 86.2691
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 87.234
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 88.2031
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 89.1765
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 90.1541
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 91.136
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 92.1221
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 93.1125
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 94.1071
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 95.106
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 96.1091
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 97.1165
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 98.1281
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 99.144
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "5": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.4118
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.8272
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.2462
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.6688
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 2.095
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 2.5248
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 2.9582
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 3.3952
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 3.8358
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 4.28
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 4.7278
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 5.1792
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 5.6342
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 6.0928
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 6.555
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 7.0208
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 7.4902
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 7.9632
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 8.4398
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 8.92
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 9.4038
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 9.8912
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 10.3822
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 10.8768
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 11.375
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 11.8768
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 12.3822
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 12.8912
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 13.4038
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 13.92
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 14.4398
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 14.9632
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 15.4902
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 16.0208
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 16.555
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 17.0928
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 17.6342
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 18.1792
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 18.7278
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 19.28
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 19.8358
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 20.3952
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 20.9582
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 21.5248
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 22.095
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 22.6688
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 23.2462
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 23.8272
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 24.4118
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 25.0
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 25.5918
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 26.1872
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 26.7862
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 27.3888
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 27.995
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 28.6048
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 29.2182
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 29.8352
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 30.4558
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 31.08
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 31.7078
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 32.3392
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 32.9742
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 33.6128
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 34.255
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 34.9008
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 35.5502
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 36.2032
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 36.8598
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 37.52
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 38.1838
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 38.8512
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 39.5222
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 40.1968
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 40.875
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 41.5568
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 42.2422
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 42.9312
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 43.6238
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 44.32
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 45.0198
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 45.7232
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 46.4302
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 47.1408
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 47.855
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 48.5728
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 49.2942
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 50.0192
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 50.7478
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 51.48
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 52.2158
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 52.9552
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 53.6982
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 54.4448
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 55.195
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 55.9488
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 56.7062
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 57.4672
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 58.2318
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 59.0
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 59.7718
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 60.5472
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 61.3262
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 62.1088
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 62.895
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 63.6848
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 64.4782
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 65.2752
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 66.0758
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 66.88
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 67.6878
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 68.4992
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 69.3142
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 70.1328
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 70.955
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 71.7808
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 72.6102
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 73.4432
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 74.2798
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 75.12
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 75.9638
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 76.8112
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 77.6622
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 78.5168
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 79.375
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 80.2368
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 81.1022
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 81.9712
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 82.8438
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 83.72
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 84.5998
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 85.4832
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 86.3702
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 87.2608
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 88.155
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 89.0528
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 89.9542
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 90.8592
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 91.7678
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 92.68
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 93.5958
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 94.5152
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 95.4382
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 96.3648
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 97.295
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 98.2288
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 99.1662
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "6": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.3815
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.766
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.1535
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.544
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 1.9375
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 2.334
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 2.7335
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 3.136
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 3.5415
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 3.95
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 4.3615
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 4.776
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 5.1935
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 5.614
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 6.0375
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 6.464
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 6.8935
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 7.326
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 7.7615
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 8.2
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 8.6415
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 9.086
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 9.5335
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 9.984
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 10.4375
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 10.894
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 11.3535
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 11.816
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 12.2815
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 12.75
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 13.2215
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 13.696
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 14.1735
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 14.654
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 15.1375
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 15.624
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 16.1135
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 16.606
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 17.1015
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 17.6
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 18.1015
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 18.606
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 19.1135
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 19.624
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 20.1375
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 20.654
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 21.1735
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 21.696
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 22.2215
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 22.75
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 23.2815
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 23.816
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 24.3535
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 24.894
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 25.4375
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 25.984
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 26.5335
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 27.086
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 27.6415
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 28.2
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 28.7615
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 29.326
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 29.8935
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 30.464
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 31.0375
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 31.614
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 32.1935
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 32.776
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 33.3615
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 33.95
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 34.5415
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 35.136
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 35.7335
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 36.334
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 36.9375
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 37.544
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 38.1535
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 38.766
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 39.3815
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 40.0
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 40.6215
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 41.246
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 41.8735
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 42.504
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 43.1375
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 43.774
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 44.4135
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 45.056
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 45.7015
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 46.35
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 47.0015
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 47.656
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 48.3135
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 48.974
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 49.6375
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 50.304
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 50.9735
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 51.646
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 52.3215
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 53.0
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 53.6815
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 54.366
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 55.0535
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 55.744
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 56.4375
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 57.134
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 57.8335
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 58.536
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 59.2415
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 59.95
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 60.6615
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 61.376
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 62.0935
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 62.814
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 63.5375
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 64.264
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 64.9935
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 65.726
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 66.4615
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 67.2
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 67.9415
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 68.686
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 69.4335
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 70.184
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 70.9375
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 71.694
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 72.4535
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 73.216
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 73.9815
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 74.75
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 75.5215
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 76.296
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 77.0735
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 77.854
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 78.6375
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 79.424
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 80.2135
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 81.006
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 81.8015
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 82.6
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 83.4015
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 84.206
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 85.0135
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 85.824
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 86.6375
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 87.454
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 88.2735
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 89.096
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 89.9215
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 90.75
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 91.5815
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 92.416
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 93.2535
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 94.094
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 94.9375
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 95.784
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 96.6335
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 97.486
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 98.3415
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 99.2
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "7": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.3512
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.705
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 1.0612
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.42
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 1.7812
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 2.145
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 2.5112
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 2.88
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 3.2512
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 3.625
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 4.0012
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 4.38
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 4.7612
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 5.145
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 5.5312
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 5.92
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 6.3112
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 6.705
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 7.1012
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 7.5
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 7.9012
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 8.305
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 8.7112
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 9.12
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 9.5312
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 9.945
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 10.3613
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 10.78
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 11.2012
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 11.625
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 12.0512
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 12.48
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 12.9112
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 13.345
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 13.7812
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 14.22
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 14.6612
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 15.105
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 15.5512
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 16.0
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 16.4513
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 16.905
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 17.3612
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 17.82
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 18.2812
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 18.745
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 19.2112
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 19.68
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 20.1512
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 20.625
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 21.1012
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 21.58
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 22.0612
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 22.545
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 23.0312
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 23.52
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 24.0113
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 24.505
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 25.0012
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 25.5
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 26.0012
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 26.505
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 27.0112
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 27.52
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 28.0312
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 28.545
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 29.0613
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 29.58
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 30.1013
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 30.625
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 31.1512
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 31.68
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 32.2112
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 32.745
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 33.2812
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 33.82
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 34.3612
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 34.905
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 35.4513
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 36.0
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 36.5512
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 37.105
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 37.6612
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 38.22
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 38.7812
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 39.345
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 39.9112
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 40.48
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 41.0512
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 41.625
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 42.2013
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 42.78
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 43.3612
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 43.945
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 44.5312
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 45.12
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 45.7112
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 46.305
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 46.9012
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 47.5
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 48.1012
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 48.705
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 49.3113
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 49.92
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 50.5312
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 51.145
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 51.7612
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 52.38
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 53.0012
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 53.625
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 54.2512
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 54.88
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 55.5112
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 56.145
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 56.7812
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 57.42
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 58.0612
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 58.705
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 59.3512
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 60.0
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 60.6512
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 61.305
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 61.9612
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 62.62
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 63.2812
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 63.945
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 64.6112
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 65.28
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 65.9513
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 66.625
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 67.3012
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 67.98
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 68.6612
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 69.345
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 70.0312
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 70.72
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 71.4112
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 72.105
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 72.8012
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 73.5
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 74.2012
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 74.905
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 75.6112
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 76.32
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 77.0312
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 77.745
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 78.4612
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 79.18
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 79.9013
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 80.625
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 81.3512
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 82.08
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 82.8113
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 83.545
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 84.2812
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 85.02
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 85.7612
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 86.505
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 87.2512
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 88.0
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 88.7512
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 89.505
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 90.2612
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 91.02
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 91.7812
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 92.545
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 93.3113
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 94.08
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 94.8512
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 95.625
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 96.4012
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 97.18
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 97.9613
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 98.745
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 99.5312
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "8": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.321
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.644
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 0.969
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.296
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 1.625
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 1.956
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 2.289
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 2.624
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 2.961
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 3.3
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 3.641
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 3.984
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 4.329
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 4.676
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 5.025
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 5.376
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 5.729
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 6.084
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 6.441
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 6.8
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 7.161
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 7.524
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 7.889
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 8.256
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 8.625
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 8.996
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 9.369
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 9.744
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 10.121
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 10.5
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 10.881
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 11.264
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 11.649
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 12.036
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 12.425
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 12.816
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 13.209
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 13.604
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 14.001
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 14.4
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 14.801
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 15.204
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 15.609
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 16.016
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 16.425
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 16.836
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 17.249
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 17.664
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 18.081
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 18.5
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 18.921
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 19.344
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 19.769
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 20.196
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 20.625
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 21.056
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 21.489
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 21.924
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 22.361
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 22.8
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 23.241
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 23.684
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 24.129
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 24.576
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 25.025
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 25.476
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 25.929
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 26.384
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 26.841
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 27.3
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 27.761
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 28.224
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 28.689
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 29.156
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 29.625
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 30.096
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 30.569
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 31.044
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 31.521
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 32.0
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 32.481
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 32.964
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 33.449
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 33.936
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 34.425
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 34.916
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 35.409
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 35.904
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 36.401
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 36.9
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 37.401
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 37.904
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 38.409
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 38.916
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 39.425
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 39.936
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 40.449
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 40.964
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 41.481
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 42.0
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 42.521
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 43.044
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 43.569
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 44.096
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 44.625
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 45.156
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 45.689
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 46.224
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 46.761
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 47.3
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 47.841
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 48.384
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 48.929
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 49.476
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 50.025
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 50.576
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 51.129
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 51.684
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 52.241
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 52.8
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 53.361
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 53.924
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 54.489
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 55.056
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 55.625
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 56.196
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 56.769
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 57.344
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 57.921
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 58.5
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 59.081
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 59.664
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 60.249
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 60.836
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 61.425
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 62.016
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 62.609
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 63.204
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 63.801
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 64.4
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 65.001
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 65.604
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 66.209
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 66.816
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 67.425
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 68.036
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 68.649
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 69.264
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 69.881
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 70.5
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 71.121
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 71.744
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 72.369
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 72.996
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 73.625
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 74.256
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 74.889
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 75.524
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 76.161
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 76.8
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 77.441
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 78.084
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 78.729
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 79.376
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 80.025
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 80.676
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 81.329
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 81.984
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 82.641
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 83.3
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 83.961
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 84.624
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 85.289
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 85.956
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 86.625
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 87.296
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 87.969
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 88.644
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 89.321
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 90.0
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 90.681
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 91.364
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 92.049
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 92.736
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 93.425
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 94.116
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 94.809
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 95.504
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 96.201
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 96.9
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 97.601
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 98.304
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 99.009
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 99.716
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 100.0
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 100.0
+    }
+   ]
+  },
+  "9": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.2908
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.5832
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 0.8772
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.1728
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 1.47
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 1.7688
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 2.0692
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 2.3712
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 2.6748
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 2.98
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 3.2868
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 3.5952
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 3.9052
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 4.2168
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 4.53
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 4.8448
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 5.1612
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 5.4792
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 5.7988
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 6.12
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 6.4428
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 6.7672
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 7.0932
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 7.4208
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 7.75
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 8.0808
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 8.4132
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 8.7472
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 9.0828
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 9.42
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 9.7588
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 10.0992
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 10.4412
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 10.7848
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 11.13
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 11.4768
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 11.8252
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 12.1752
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 12.5268
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 12.88
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 13.2348
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 13.5912
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 13.9492
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 14.3088
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 14.67
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 15.0328
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 15.3972
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 15.7632
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 16.1308
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 16.5
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 16.8708
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 17.2432
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 17.6172
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 17.9928
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 18.37
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 18.7488
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 19.1292
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 19.5112
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 19.8948
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 20.28
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 20.6668
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 21.0552
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 21.4452
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 21.8368
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 22.23
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 22.6248
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 23.0212
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 23.4192
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 23.8188
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 24.22
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 24.6228
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 25.0272
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 25.4332
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 25.8408
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 26.25
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 26.6608
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 27.0732
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 27.4872
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 27.9028
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 28.32
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 28.7388
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 29.1592
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 29.5812
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 30.0048
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 30.43
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 30.8568
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 31.2852
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 31.7152
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 32.1468
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 32.58
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 33.0148
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 33.4512
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 33.8892
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 34.3288
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 34.77
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 35.2128
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 35.6572
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 36.1032
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 36.5508
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 37.0
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 37.4508
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 37.9032
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 38.3572
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 38.8128
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 39.27
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 39.7288
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 40.1892
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 40.6512
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 41.1148
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 41.58
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 42.0468
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 42.5152
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 42.9852
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 43.4568
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 43.93
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 44.4048
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 44.8812
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 45.3592
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 45.8388
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 46.32
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 46.8028
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 47.2872
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 47.7732
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 48.2608
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 48.75
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 49.2408
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 49.7332
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 50.2272
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 50.7228
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 51.22
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 51.7188
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 52.2192
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 52.7212
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 53.2248
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 53.73
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 54.2368
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 54.7452
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 55.2552
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 55.7668
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 56.28
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 56.7948
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 57.3112
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 57.8292
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 58.3488
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 58.87
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 59.3928
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 59.9172
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 60.4432
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 60.9708
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 61.5
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 62.0308
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 62.5632
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 63.0972
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 63.6328
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 64.17
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 64.7088
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 65.2492
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 65.7912
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 66.3348
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 66.88
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 67.4268
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 67.9752
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 68.5252
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 69.0768
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 69.63
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 70.1848
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 70.7412
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 71.2992
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 71.8588
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 72.42
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 72.9828
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 73.5472
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 74.1132
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 74.6808
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 75.25
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 75.8208
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 76.3932
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 76.9672
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 77.5428
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 78.12
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 78.6988
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 79.2792
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 79.8612
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 80.4448
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 81.03
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 81.6168
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 82.2052
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 82.7952
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 83.3868
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 83.98
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 84.5748
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 85.1712
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 85.7692
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 86.3688
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 86.97
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 87.5728
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 88.1772
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 88.7832
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 89.3908
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 90.0
+    }
+   ]
+  },
+  "10": {
+   "figure": "X3.26",
+   "x_scale": "linear",
+   "x_axis": "total_deduct_value",
+   "y_axis": "corrected_deduct_value",
+   "method": "placeholder_polynomial_fit",
+   "provisional": true,
+   "note": "PLACEHOLDER. These points are the MDPI Sensors 2024 polynomial fits tabulated onto a log density axis, NOT a digitization of the published graph. They must not be presented as ASTM D6433-99 values. To make this authoritative, read the figure and replace the points.",
+   "points": [
+    {
+     "tdv": 0.0,
+     "cdv": 0.0
+    },
+    {
+     "tdv": 0.5,
+     "cdv": 0.2606
+    },
+    {
+     "tdv": 1.0,
+     "cdv": 0.5225
+    },
+    {
+     "tdv": 1.5,
+     "cdv": 0.7856
+    },
+    {
+     "tdv": 2.0,
+     "cdv": 1.05
+    },
+    {
+     "tdv": 2.5,
+     "cdv": 1.3156
+    },
+    {
+     "tdv": 3.0,
+     "cdv": 1.5825
+    },
+    {
+     "tdv": 3.5,
+     "cdv": 1.8506
+    },
+    {
+     "tdv": 4.0,
+     "cdv": 2.12
+    },
+    {
+     "tdv": 4.5,
+     "cdv": 2.3906
+    },
+    {
+     "tdv": 5.0,
+     "cdv": 2.6625
+    },
+    {
+     "tdv": 5.5,
+     "cdv": 2.9356
+    },
+    {
+     "tdv": 6.0,
+     "cdv": 3.21
+    },
+    {
+     "tdv": 6.5,
+     "cdv": 3.4856
+    },
+    {
+     "tdv": 7.0,
+     "cdv": 3.7625
+    },
+    {
+     "tdv": 7.5,
+     "cdv": 4.0406
+    },
+    {
+     "tdv": 8.0,
+     "cdv": 4.32
+    },
+    {
+     "tdv": 8.5,
+     "cdv": 4.6006
+    },
+    {
+     "tdv": 9.0,
+     "cdv": 4.8825
+    },
+    {
+     "tdv": 9.5,
+     "cdv": 5.1656
+    },
+    {
+     "tdv": 10.0,
+     "cdv": 5.45
+    },
+    {
+     "tdv": 10.5,
+     "cdv": 5.7356
+    },
+    {
+     "tdv": 11.0,
+     "cdv": 6.0225
+    },
+    {
+     "tdv": 11.5,
+     "cdv": 6.3106
+    },
+    {
+     "tdv": 12.0,
+     "cdv": 6.6
+    },
+    {
+     "tdv": 12.5,
+     "cdv": 6.8906
+    },
+    {
+     "tdv": 13.0,
+     "cdv": 7.1825
+    },
+    {
+     "tdv": 13.5,
+     "cdv": 7.4756
+    },
+    {
+     "tdv": 14.0,
+     "cdv": 7.77
+    },
+    {
+     "tdv": 14.5,
+     "cdv": 8.0656
+    },
+    {
+     "tdv": 15.0,
+     "cdv": 8.3625
+    },
+    {
+     "tdv": 15.5,
+     "cdv": 8.6606
+    },
+    {
+     "tdv": 16.0,
+     "cdv": 8.96
+    },
+    {
+     "tdv": 16.5,
+     "cdv": 9.2606
+    },
+    {
+     "tdv": 17.0,
+     "cdv": 9.5625
+    },
+    {
+     "tdv": 17.5,
+     "cdv": 9.8656
+    },
+    {
+     "tdv": 18.0,
+     "cdv": 10.17
+    },
+    {
+     "tdv": 18.5,
+     "cdv": 10.4756
+    },
+    {
+     "tdv": 19.0,
+     "cdv": 10.7825
+    },
+    {
+     "tdv": 19.5,
+     "cdv": 11.0906
+    },
+    {
+     "tdv": 20.0,
+     "cdv": 11.4
+    },
+    {
+     "tdv": 20.5,
+     "cdv": 11.7106
+    },
+    {
+     "tdv": 21.0,
+     "cdv": 12.0225
+    },
+    {
+     "tdv": 21.5,
+     "cdv": 12.3356
+    },
+    {
+     "tdv": 22.0,
+     "cdv": 12.65
+    },
+    {
+     "tdv": 22.5,
+     "cdv": 12.9656
+    },
+    {
+     "tdv": 23.0,
+     "cdv": 13.2825
+    },
+    {
+     "tdv": 23.5,
+     "cdv": 13.6006
+    },
+    {
+     "tdv": 24.0,
+     "cdv": 13.92
+    },
+    {
+     "tdv": 24.5,
+     "cdv": 14.2406
+    },
+    {
+     "tdv": 25.0,
+     "cdv": 14.5625
+    },
+    {
+     "tdv": 25.5,
+     "cdv": 14.8856
+    },
+    {
+     "tdv": 26.0,
+     "cdv": 15.21
+    },
+    {
+     "tdv": 26.5,
+     "cdv": 15.5356
+    },
+    {
+     "tdv": 27.0,
+     "cdv": 15.8625
+    },
+    {
+     "tdv": 27.5,
+     "cdv": 16.1906
+    },
+    {
+     "tdv": 28.0,
+     "cdv": 16.52
+    },
+    {
+     "tdv": 28.5,
+     "cdv": 16.8506
+    },
+    {
+     "tdv": 29.0,
+     "cdv": 17.1825
+    },
+    {
+     "tdv": 29.5,
+     "cdv": 17.5156
+    },
+    {
+     "tdv": 30.0,
+     "cdv": 17.85
+    },
+    {
+     "tdv": 30.5,
+     "cdv": 18.1856
+    },
+    {
+     "tdv": 31.0,
+     "cdv": 18.5225
+    },
+    {
+     "tdv": 31.5,
+     "cdv": 18.8606
+    },
+    {
+     "tdv": 32.0,
+     "cdv": 19.2
+    },
+    {
+     "tdv": 32.5,
+     "cdv": 19.5406
+    },
+    {
+     "tdv": 33.0,
+     "cdv": 19.8825
+    },
+    {
+     "tdv": 33.5,
+     "cdv": 20.2256
+    },
+    {
+     "tdv": 34.0,
+     "cdv": 20.57
+    },
+    {
+     "tdv": 34.5,
+     "cdv": 20.9156
+    },
+    {
+     "tdv": 35.0,
+     "cdv": 21.2625
+    },
+    {
+     "tdv": 35.5,
+     "cdv": 21.6106
+    },
+    {
+     "tdv": 36.0,
+     "cdv": 21.96
+    },
+    {
+     "tdv": 36.5,
+     "cdv": 22.3106
+    },
+    {
+     "tdv": 37.0,
+     "cdv": 22.6625
+    },
+    {
+     "tdv": 37.5,
+     "cdv": 23.0156
+    },
+    {
+     "tdv": 38.0,
+     "cdv": 23.37
+    },
+    {
+     "tdv": 38.5,
+     "cdv": 23.7256
+    },
+    {
+     "tdv": 39.0,
+     "cdv": 24.0825
+    },
+    {
+     "tdv": 39.5,
+     "cdv": 24.4406
+    },
+    {
+     "tdv": 40.0,
+     "cdv": 24.8
+    },
+    {
+     "tdv": 40.5,
+     "cdv": 25.1606
+    },
+    {
+     "tdv": 41.0,
+     "cdv": 25.5225
+    },
+    {
+     "tdv": 41.5,
+     "cdv": 25.8856
+    },
+    {
+     "tdv": 42.0,
+     "cdv": 26.25
+    },
+    {
+     "tdv": 42.5,
+     "cdv": 26.6156
+    },
+    {
+     "tdv": 43.0,
+     "cdv": 26.9825
+    },
+    {
+     "tdv": 43.5,
+     "cdv": 27.3506
+    },
+    {
+     "tdv": 44.0,
+     "cdv": 27.72
+    },
+    {
+     "tdv": 44.5,
+     "cdv": 28.0906
+    },
+    {
+     "tdv": 45.0,
+     "cdv": 28.4625
+    },
+    {
+     "tdv": 45.5,
+     "cdv": 28.8356
+    },
+    {
+     "tdv": 46.0,
+     "cdv": 29.21
+    },
+    {
+     "tdv": 46.5,
+     "cdv": 29.5856
+    },
+    {
+     "tdv": 47.0,
+     "cdv": 29.9625
+    },
+    {
+     "tdv": 47.5,
+     "cdv": 30.3406
+    },
+    {
+     "tdv": 48.0,
+     "cdv": 30.72
+    },
+    {
+     "tdv": 48.5,
+     "cdv": 31.1006
+    },
+    {
+     "tdv": 49.0,
+     "cdv": 31.4825
+    },
+    {
+     "tdv": 49.5,
+     "cdv": 31.8656
+    },
+    {
+     "tdv": 50.0,
+     "cdv": 32.25
+    },
+    {
+     "tdv": 50.5,
+     "cdv": 32.6356
+    },
+    {
+     "tdv": 51.0,
+     "cdv": 33.0225
+    },
+    {
+     "tdv": 51.5,
+     "cdv": 33.4106
+    },
+    {
+     "tdv": 52.0,
+     "cdv": 33.8
+    },
+    {
+     "tdv": 52.5,
+     "cdv": 34.1906
+    },
+    {
+     "tdv": 53.0,
+     "cdv": 34.5825
+    },
+    {
+     "tdv": 53.5,
+     "cdv": 34.9756
+    },
+    {
+     "tdv": 54.0,
+     "cdv": 35.37
+    },
+    {
+     "tdv": 54.5,
+     "cdv": 35.7656
+    },
+    {
+     "tdv": 55.0,
+     "cdv": 36.1625
+    },
+    {
+     "tdv": 55.5,
+     "cdv": 36.5606
+    },
+    {
+     "tdv": 56.0,
+     "cdv": 36.96
+    },
+    {
+     "tdv": 56.5,
+     "cdv": 37.3606
+    },
+    {
+     "tdv": 57.0,
+     "cdv": 37.7625
+    },
+    {
+     "tdv": 57.5,
+     "cdv": 38.1656
+    },
+    {
+     "tdv": 58.0,
+     "cdv": 38.57
+    },
+    {
+     "tdv": 58.5,
+     "cdv": 38.9756
+    },
+    {
+     "tdv": 59.0,
+     "cdv": 39.3825
+    },
+    {
+     "tdv": 59.5,
+     "cdv": 39.7906
+    },
+    {
+     "tdv": 60.0,
+     "cdv": 40.2
+    },
+    {
+     "tdv": 60.5,
+     "cdv": 40.6106
+    },
+    {
+     "tdv": 61.0,
+     "cdv": 41.0225
+    },
+    {
+     "tdv": 61.5,
+     "cdv": 41.4356
+    },
+    {
+     "tdv": 62.0,
+     "cdv": 41.85
+    },
+    {
+     "tdv": 62.5,
+     "cdv": 42.2656
+    },
+    {
+     "tdv": 63.0,
+     "cdv": 42.6825
+    },
+    {
+     "tdv": 63.5,
+     "cdv": 43.1006
+    },
+    {
+     "tdv": 64.0,
+     "cdv": 43.52
+    },
+    {
+     "tdv": 64.5,
+     "cdv": 43.9406
+    },
+    {
+     "tdv": 65.0,
+     "cdv": 44.3625
+    },
+    {
+     "tdv": 65.5,
+     "cdv": 44.7856
+    },
+    {
+     "tdv": 66.0,
+     "cdv": 45.21
+    },
+    {
+     "tdv": 66.5,
+     "cdv": 45.6356
+    },
+    {
+     "tdv": 67.0,
+     "cdv": 46.0625
+    },
+    {
+     "tdv": 67.5,
+     "cdv": 46.4906
+    },
+    {
+     "tdv": 68.0,
+     "cdv": 46.92
+    },
+    {
+     "tdv": 68.5,
+     "cdv": 47.3506
+    },
+    {
+     "tdv": 69.0,
+     "cdv": 47.7825
+    },
+    {
+     "tdv": 69.5,
+     "cdv": 48.2156
+    },
+    {
+     "tdv": 70.0,
+     "cdv": 48.65
+    },
+    {
+     "tdv": 70.5,
+     "cdv": 49.0856
+    },
+    {
+     "tdv": 71.0,
+     "cdv": 49.5225
+    },
+    {
+     "tdv": 71.5,
+     "cdv": 49.9606
+    },
+    {
+     "tdv": 72.0,
+     "cdv": 50.4
+    },
+    {
+     "tdv": 72.5,
+     "cdv": 50.8406
+    },
+    {
+     "tdv": 73.0,
+     "cdv": 51.2825
+    },
+    {
+     "tdv": 73.5,
+     "cdv": 51.7256
+    },
+    {
+     "tdv": 74.0,
+     "cdv": 52.17
+    },
+    {
+     "tdv": 74.5,
+     "cdv": 52.6156
+    },
+    {
+     "tdv": 75.0,
+     "cdv": 53.0625
+    },
+    {
+     "tdv": 75.5,
+     "cdv": 53.5106
+    },
+    {
+     "tdv": 76.0,
+     "cdv": 53.96
+    },
+    {
+     "tdv": 76.5,
+     "cdv": 54.4106
+    },
+    {
+     "tdv": 77.0,
+     "cdv": 54.8625
+    },
+    {
+     "tdv": 77.5,
+     "cdv": 55.3156
+    },
+    {
+     "tdv": 78.0,
+     "cdv": 55.77
+    },
+    {
+     "tdv": 78.5,
+     "cdv": 56.2256
+    },
+    {
+     "tdv": 79.0,
+     "cdv": 56.6825
+    },
+    {
+     "tdv": 79.5,
+     "cdv": 57.1406
+    },
+    {
+     "tdv": 80.0,
+     "cdv": 57.6
+    },
+    {
+     "tdv": 80.5,
+     "cdv": 58.0606
+    },
+    {
+     "tdv": 81.0,
+     "cdv": 58.5225
+    },
+    {
+     "tdv": 81.5,
+     "cdv": 58.9856
+    },
+    {
+     "tdv": 82.0,
+     "cdv": 59.45
+    },
+    {
+     "tdv": 82.5,
+     "cdv": 59.9156
+    },
+    {
+     "tdv": 83.0,
+     "cdv": 60.3825
+    },
+    {
+     "tdv": 83.5,
+     "cdv": 60.8506
+    },
+    {
+     "tdv": 84.0,
+     "cdv": 61.32
+    },
+    {
+     "tdv": 84.5,
+     "cdv": 61.7906
+    },
+    {
+     "tdv": 85.0,
+     "cdv": 62.2625
+    },
+    {
+     "tdv": 85.5,
+     "cdv": 62.7356
+    },
+    {
+     "tdv": 86.0,
+     "cdv": 63.21
+    },
+    {
+     "tdv": 86.5,
+     "cdv": 63.6856
+    },
+    {
+     "tdv": 87.0,
+     "cdv": 64.1625
+    },
+    {
+     "tdv": 87.5,
+     "cdv": 64.6406
+    },
+    {
+     "tdv": 88.0,
+     "cdv": 65.12
+    },
+    {
+     "tdv": 88.5,
+     "cdv": 65.6006
+    },
+    {
+     "tdv": 89.0,
+     "cdv": 66.0825
+    },
+    {
+     "tdv": 89.5,
+     "cdv": 66.5656
+    },
+    {
+     "tdv": 90.0,
+     "cdv": 67.05
+    },
+    {
+     "tdv": 90.5,
+     "cdv": 67.5356
+    },
+    {
+     "tdv": 91.0,
+     "cdv": 68.0225
+    },
+    {
+     "tdv": 91.5,
+     "cdv": 68.5106
+    },
+    {
+     "tdv": 92.0,
+     "cdv": 69.0
+    },
+    {
+     "tdv": 92.5,
+     "cdv": 69.4906
+    },
+    {
+     "tdv": 93.0,
+     "cdv": 69.9825
+    },
+    {
+     "tdv": 93.5,
+     "cdv": 70.4756
+    },
+    {
+     "tdv": 94.0,
+     "cdv": 70.97
+    },
+    {
+     "tdv": 94.5,
+     "cdv": 71.4656
+    },
+    {
+     "tdv": 95.0,
+     "cdv": 71.9625
+    },
+    {
+     "tdv": 95.5,
+     "cdv": 72.4606
+    },
+    {
+     "tdv": 96.0,
+     "cdv": 72.96
+    },
+    {
+     "tdv": 96.5,
+     "cdv": 73.4606
+    },
+    {
+     "tdv": 97.0,
+     "cdv": 73.9625
+    },
+    {
+     "tdv": 97.5,
+     "cdv": 74.4656
+    },
+    {
+     "tdv": 98.0,
+     "cdv": 74.97
+    },
+    {
+     "tdv": 98.5,
+     "cdv": 75.4756
+    },
+    {
+     "tdv": 99.0,
+     "cdv": 75.9825
+    },
+    {
+     "tdv": 99.5,
+     "cdv": 76.4906
+    },
+    {
+     "tdv": 100.0,
+     "cdv": 77.0
+    }
+   ]
+  }
+ }
+}

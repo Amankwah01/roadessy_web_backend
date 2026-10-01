@@ -1,0 +1,1191 @@
+================================================================================
+         ROADASSY WEB BACKEND - COMPLETE ARCHITECTURE & LOGIC DOCUMENTATION
+         Generated for Thesis Writing | Root: roadessy_web_backend/
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1.   Project Overview & Architecture
+2.   Dual-Pipeline Design (ASTM vs Roadessy)
+3.   Core Configuration Constants
+4.   Database Schema & Models
+5.   Inertial Service (IRI Computation)
+6.   Preprocessing Pipeline (ST1-ST5b)
+7.   Vision Service (YOLO + Depth Estimation)
+8.   Depth Estimation Integration (DAV2E, MBTP, Geometry Anchor, RGB Segmentation)
+9.   SfM-Based Depth Service (depth_service.py)
+10. ASTM PCI Calculator (astm_pci.py)
+11. Fusion Service (Dual-Pipeline PCI)
+12. Spatial & Map Matching Service
+13. Heavy Compute Pipeline Orchestrator
+14. API Routes
+15. Database Migrations Summary
+16. Logging Architecture
+17. Key Formulas Reference
+
+================================================================================
+1. PROJECT OVERVIEW & ARCHITECTURE
+================================================================================
+
+Root Directory: F:\Adubofour\roadessy_mphil\roadessy_web_backend
+
+Framework: FastAPI (Python 3.x)
+Database: PostgreSQL with PostGIS (or SQLite fallback)
+ORM: SQLAlchemy
+Migrations: Alembic
+Depth Estimation: DepthAnythingV2 (Hugging Face Transformers/ONNX), OpenCV, NumPy
+YOLO: Ultralytics YOLOv11 (custom-trained on 9-class Ghana road distress dataset)
+
+Architecture Pattern: Dual-Pipeline Modular Design
+
+Two independent pavement condition assessment pipelines run in parallel:
+
+  Pipeline 1 (ASTM):  IRI via Quarter-Car Model (QCM) + ASTM D6433-18 PCI
+  Pipeline 2 (Roadessy): IRI via simple displacement + Ghana Manual 2023 PCI
+
+Both pipelines share:
+  - GPS loading and parsing
+  - Spatial map-matching
+  - Camera calibration lookup
+  - Vision processing (YOLO detection)
+  - Depth estimation (DAV2E + Geometry Anchor + MBTP)
+
+Output directory: F:\Adubofour\rodeessy_mphil\RoadSurveyOutputs\{run_id}\
+
+================================================================================
+2. DUAL-PIPELINE DESIGN (ASTM vs Roadessy)
+================================================================================
+
+PIPELINE 1: ASTM (International Standard)
+-----------------------------------------
+IRI Method: Quarter-Car Model (QCM) simulation per ASTM E1926/E950
+  - Target sampling frequency: 100 Hz (upsampled via resample_poly)
+  - Reference speed: 80 km/h (22.22 m/s)
+  - Spatial resolution: 25mm (0.025m)
+  - Distance computed from: speed × time (standardized simulation)
+  - NOT from GPS Haversine (by design - QCM simulates at reference speed)
+
+Vision Method: MDPI Sensors 2024 paper (Ibragimov et al.)
+  - YOLO distress detection
+  - AASHTO R85-18 + ASTM D6433-18 classification
+  - Polynomial DV (Deduct Value) curves
+
+PCI Output: ASTM PCI = 100 - CDV (Corrected Deduct Value)
+IRI reported SEPARATELY per ASTM D6433
+
+PIPELINE 2: Roadessy (Custom/Ghana-aligned)
+-------------------------------------------
+IRI Method: Simple displacement-to-distance method (Enochs Thesis Eq 2.9/3.9)
+  - Travel distance from Haversine lat/lon
+  - IRI = sum(|Δvertical_displacement|) / distance_km (m/km)
+  - Distance computed from GPS Haversine coordinates
+
+Vision Method: Ghana Manual 2023 Table 3 ratings
+  - YOLO distress detection
+  - Ghana-specific distress type mapping
+  - Custom DV computation with weights
+
+PCI Output: Roadessy PCI = 100 - corrected(DV_sum)
+  - Correction factor: 1.2 (prototype, verify against RMM manual)
+  - DV_sum = Σ(avg_rating × weight) per distress type
+  - IRI reported separately
+
+================================================================================
+3. CORE CONFIGURATION CONSTANTS (app/core/config.py)
+================================================================================
+
+Golden Quarter-Car Model Constants:
+  C_S = 6.0        # Suspension damping coefficient (1/s)
+  K_S = 623.0      # Suspension stiffness coefficient (1/s^2)
+  K_T = 653.0      # Tire stiffness coefficient (1/s^2)
+  M_R = 0.15       # Mass ratio (Unsprung mass / Sprung mass)
+  V_SPEED = 22.22  # Standard calibration velocity (80 km/h in m/s)
+  V_REF_KMH = 80.0 # Standard reference speed for IRI computation (km/h)
+
+IRI Segment Configuration:
+  IRI_SEGMENT_LENGTH_M = 50.0  # Standard segment length for IRI reporting (m)
+
+Parametric PCHIP Spline Control Knots (MATRIX_KNOTS_X):
+  [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+PCHIP Interpolators (PCI rating curves):
+  PCHIP_ALLIGATOR: [5, 12, 22, 30, 45, 60, 72, 85, 100]
+  PCHIP_LINEAR:    [2, 6, 12, 18, 28, 42, 50, 68, 85]
+  PCHIP_POTHOLE:   [15, 28, 45, 55, 70, 85, 90, 98, 100]
+
+Quarter Car Model Physical Parameters (from inertial_service.py):
+  ms = 250.0    # Sprung mass (kg)
+  mu = 30.0     # Unsprung mass (kg)
+  ks = 63300.0  # Suspension stiffness (N/m)
+  kt = 653000.0 # Tire stiffness (N/m)
+  cs = 6000.0   # Suspension damping (N·s/m)
+
+================================================================================
+4. DATABASE SCHEMA & MODELS (app/models/survey.py)
+================================================================================
+
+Database URL: app/database/session.py (supports PostgreSQL w/ PostGIS or SQLite)
+
+TABLE: survey_runs
+  - run_id: UUID (PK, auto-generated)
+  - name: String (required)
+  - user_id: String (indexed)
+  - organisation_id: String
+  - astm_pci: Float (Track 1 - ASTM)
+  - astm_qcm_iri: Float (Track 1 - ASTM QCM IRI)
+  - astm_quality_flags: JSON
+  - astm_upsampling_info: JSON
+  - simple_iri: Float (Track 2 - Simple displacement IRI)
+  - roadessy_pci: Float (Track 3 - Roadessy PCI)
+  - computed_iri: Float (Legacy)
+  - final_pci: Float (Legacy)
+  - matched_road_id: String (indexed, foreign key to gh_roads)
+  - geom_trajectory: Geometry(LINESTRING, SRID 4326)
+  - workspace_dir: String
+  - processing_metadata: JSON
+
+TABLE: map_matching_runs
+  - id: Integer (PK, autoincrement)
+  - run_id: UUID (indexed, unique constraint)
+  - matched_road_id: String (indexed)
+  - match_status, match_method: String
+  - centerline_wkt, snapped_trajectory_wkt: Text
+  - chainage_min_m, chainage_max_m, matched_distance_m, road_length_m: Float
+  - max_distance_m: Float
+  - matched_points, total_points, unmatched_points: Integer
+  - snapped_coords: JSON
+
+TABLE: iri_segments
+  - id: Integer (PK, autoincrement)
+  - run_id: UUID (indexed)
+  - road_id: String (indexed)
+  - segment_start_m, segment_end_m, iri_value: Float
+  - simple_iri: Float (Track 2)
+  - astm_qcm_iri: Float (Track 1)
+  - astm_pci_segment: Float (50m segment PCI)
+  - roadessy_pci_segment: Float (50m segment PCI)
+  - classification: String
+
+TABLE: tracked_defects
+  - id: Integer (PK, autoincrement)
+  - run_id: UUID
+  - track_id: Integer
+  - failure_mode: String
+  - max_area_m2, max_width_mm, max_depth_mm, mean_depth_mm: Float
+  - depth_confidence: Float
+  - depth_method, depth_message: String/Text
+  - deduct_value: Float
+  - image_path: String
+  - astm_distress_type, ghana_distress_type: String
+  - ghana_rating_1to9: Integer
+  - yolo_class_id: Integer
+  - confidence: Float
+  - chainage_m: Float
+  - geom_location: Geometry(POINT, SRID 4326)
+
+YOLO Class Mapping (9 classes):
+  0: Bleeding           -> AASHTO: Bleeding        | Ghana: Bleeding/Flushing
+  1: Corrugation         -> AASHTO: Corrugation     | Ghana: Corrugation/Shoving
+  2: Crack               -> AASHTO: Longitudinal    | Ghana: Longitudinal Cracking
+  3: Patching            -> AASHTO: Patching        | Ghana: Patching
+  4: Pothole             -> AASHTO: Potholes        | Ghana: Potholes
+  5: Ravelling           -> AASHTO: Weathering      | Ghana: Ravelling
+  6: Rutting             -> AASHTO: Rutting         | Ghana: Rutting
+  7: Shoving             -> AASHTO: Shoving         | Ghana: Corrugation/Shoving
+  8: Subgrade Failure    -> AASHTO: Depression      | Ghana: Subgrade Failure
+
+================================================================================
+5. INERTIAL SERVICE (app/services/inertial_service.py)
+================================================================================
+
+CLASS: InertialRefineryService
+
+METHOD 1: process_vibration_data() - Simple Displacement IRI
+-----------------------------------------------------------
+Input: timestamps (s), accel_z (m/s²), speeds_kmh, latitudes, longitudes
+Output: InertialPipelineResult
+
+Steps:
+  1. Build DataFrame with sensor data
+  2. Run preprocessing pipeline (ST1-ST5b) via PreprocessingPipeline.run_pipeline()
+  3. Extract vertical_displacement from processed data
+  4. Compute travel distance via Haversine formula from lat/lon
+
+Haversine Formula:
+  φ1, φ2 = lat1, lat2 in radians
+  Δφ = radians(lat2 - lat1)
+  Δλ = radians(lon2 - lon1)
+  a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+  c = 2·atan2(√a, √(1-a))
+  distance = R · c  (R = 6371000.0 m, Earth radius)
+
+Cumulative distance = cumsum of haversine distances between consecutive points
+
+Segment Processing (50m segments):
+  accumulated_dist = 0.0
+  accumulated_disp = 0.0
+  prev_vert_disp = 0.0
+  
+  For each point i:
+    dist_delta = distances[i] - distances[i-1]
+    accumulated_dist += dist_delta
+    vert_change = |vert_disp[i] - prev_vert_disp|
+    accumulated_disp += vert_change
+    prev_vert_disp = vert_disp[i]
+    
+    if accumulated_dist >= segment_length_m (50.0):
+      seg_iri = accumulated_disp / (accumulated_dist / 1000.0)  # m/km
+      record IRISegment(start_m, end_m, iri_m_km=seg_iri)
+      reset accumulators
+
+Segment IRI Formula (Enochs Thesis Eq 2.9/3.9):
+  IRI = Σ|Δvertical_displacement| / distance_km   (units: m/km)
+
+Overall IRI = mean of all segment IRIs
+
+METHOD 2: process_astm_qcm() - ASTM Quarter-Car Model
+-----------------------------------------------------
+Input: timestamps, accel_z, speeds_kmh, target_fs=100.0, target_dx=0.025, v_ref_kmh=80.0
+Output: ASTMQCMResult
+
+Steps:
+  1. Sort data by timestamp
+  2. Compute original sampling frequency: fs = 1/median(dt)
+  3. Quality flags:
+     - low_sampling_rate: if original_fs < 100 Hz
+     - speed_variation: if speed CV > 0.2
+     - insufficient_distance: if total_distance < 100m
+     - profile_gaps: if gap_ratio > 5%
+     - quarter_car_divergence: if max displacement > 1m
+
+  4. Upsample to 100 Hz using resample_poly (polyphase) or linear interpolation
+
+  5. High-pass filter at 0.1 Hz (Butterworth order 2):
+     b, a = butter(N=2, Wn=0.1, btype="highpass", fs=100.0)
+     velocity_z = filtfilt(b, a, cumsum(accel * dt))
+     disp_z = filtfilt(b, a, cumsum(velocity_z * dt))
+
+  6. Resample to uniform spatial spacing (0.025m):
+     d_uniform = arange(0, total_distance, 0.025)
+     profile_uniform = interp(d_uniform, distances, disp_z)
+
+  7. Quarter-Car Model Simulation (RK4 integration):
+
+  State vector: x = [sprung_disp, sprung_vel, unsprung_disp, unsprung_vel]
+  
+  Derivatives:
+    dx1/dt = x2  (sprung velocity)
+    dx2/dt = (-ks·(x1-x3) - cs·(x2-x4)) / ms  (sprung acceleration)
+    dx3/dt = x4  (unsprung velocity)
+    dx4/dt = (ks·(x1-x3) + cs·(x2-x4) - kt·(x3-zr)) / mu  (unsprung acceleration)
+
+  RK4 Integration:
+    k1 = f(x, zr)
+    k2 = f(x + 0.5·dt·k1, zr)
+    k3 = f(x + 0.5·dt·k2, zr)
+    k4 = f(x + dt·k3, zr)
+    x_next = x + (dt/6)·(k1 + 2·k2 + 2·k3 + k4)
+
+  IRI accumulation:
+    IRI_accum += |x[1] - x[3]| · dt  (absolute relative velocity between sprung and unsprung)
+
+  Final IRI calculation:
+    IRI = IRI_accum / total_distance · 1000  (mm/m, which equals m/km)
+
+  Time integration:
+    dt = target_dx / v_ref_ms = 0.025 / 22.22 = 0.001125 s
+
+  50m segment computation:
+    points_per_segment = 50.0 / 0.025 = 2000
+    seg_iri = segment_iri_accum / segment_distance · 1000
+
+METHOD: classify_iri_5rank(iri)
+  IRI < 2.0  -> "Very Good" (code 1)
+  IRI < 4.0  -> "Good" (code 2)
+  IRI < 6.0  -> "Fair" (code 3)
+  IRI < 8.0  -> "Poor" (code 4)
+  IRI >= 8.0 -> "Very Poor" (code 5)
+
+================================================================================
+6. PREPROCESSING PIPELINE (app/services/preprocessing_pipeline.py)
+================================================================================
+
+CLASS: PreprocessingPipeline
+
+Implements ST1-ST5b preprocessing stages per reference codebase:
+
+ST1: Format Data
+  - Rename columns from phone sensor format to standard names
+  - Mapping: 'ACCELEROMETER X (m/s²)' -> 'accel_x', 'GRAVITY X (m/s²)' -> 'gravi_x', etc.
+  - Convert numeric columns using pd.to_numeric(errors='coerce')
+
+ST2: Speed Filter
+  - Compute acceleration magnitude: |a| = √(ax² + ay² + az²)
+  - Remove rows where |a| < 0.1 (stationary threshold = 0.1g)
+  - Remove GPS speed < 5 km/h (SPEED_THRESHOLD_KMH)
+  - Remove GPS speed > 100 km/h (MAX_SPEED_KMH)
+
+ST3: Reorientation (Gravity Vector Alignment)
+  - Input: accelerometer (ax, ay, az) + gravity vector (gx, gy, gz)
+  - Normalize gravity: ĝ = g / |g|
+  - Project acceleration onto gravity-aligned frame
+  - a_dot_g = ax·gx + ay·gy + az·gz
+  - Reoriented Z (vertical): az' = a · ĝ
+  - Reoriented X: ax' = ax - (a·ĝ)·ĝx
+  - Reoriented Y: ay' = ay - (a·ĝ)·ĝy
+
+ST4: Z-axis Filter
+  - No filtering (passthrough)
+  - Actual IRI filtering happens in ST5b
+
+ST5: Location Filter
+  - Remove GPS duplicates (drop_duplicates on lat/lon)
+  - Only if meaningful GPS variation (std > 1e-6)
+
+ST5b: Vertical Displacement (Correct IRI Filter Sequence)
+  1. Remove mean from acceleration: a_corrected = a - mean(a)
+  2. Integrate to velocity (trapezoidal):
+     v[i] = v[i-1] + 0.5·(a[i] + a[i-1])·dt[i]
+  3. High-pass filter velocity at 0.1 Hz (Butterworth order 2):
+     b, a = butter(N=2, Wn=0.1, btype='high', fs=actual_fs)
+     v = filtfilt(b, a, v)
+  4. Integrate velocity to displacement (trapezoidal):
+     d[i] = d[i-1] + 0.5·(v[i] + v[i-1])·dt[i]
+  5. High-pass filter displacement at 0.1 Hz:
+     d = filtfilt(b, a, d)
+  6. Remove linear trend: d = d - polyfit(d, degree=1)
+  7. Clip: d = clip(d, -5.0, 5.0) meters
+
+Sampling frequency calculation:
+  dt = diff(time_ms / 1000.0)
+  dt = insert(dt, 0, dt[0])
+  dt = clip(dt, 0.001, 1.0)
+  fs = 1.0 / median(dt)
+  fs = clip(fs, 10.0, 200.0)
+
+================================================================================
+7. VISION SERVICE (app/services/vision_service.py)
+================================================================================
+
+CLASS: VisionAnalysisService
+
+Camera Parameters:
+  - camera_height_m (default 2.5m)
+  - camera_tilt_deg (default 0°)
+  - fx, fy (default 1000.0) - focal lengths in pixels
+  - cx, cy (default 960.0, 540.0) - principal point
+  - distortion_coefficients (optional)
+
+Camera Matrix K:
+  K = [[fx, 0, cx],
+       [0,  fy, cy],
+       [0,  0,  1]]
+
+METHOD: undistort_frame(frame)
+  - Uses cv2.getOptimalNewCameraMatrix and cv2.undistort
+  - Applies distortion coefficients (5 params, zero if none)
+
+METHOD: _pixel_to_real_world(bbox, img_shape) - Pinhole Model
+  Input: bbox = [x1, y1, x2, y2] in pixels
+  
+  w_px = |x2 - x1|
+  h_px = |y2 - y1|
+  y_center = (y1 + y2) / 2
+  
+  Pinhole Depth Estimation:
+    angle_y = atan2((y_center - cy), fy)
+    total_angle = tilt_rad + angle_y
+    z_m = camera_height_m / sin(total_angle)  (distance from camera)
+  
+  Real-world dimensions:
+    width_m = (w_px · z_m) / fx
+    length_m = (h_px · z_m) / fy
+    area_m2 = width_m · length_m
+
+METHOD: _calculate_deduct_value(class_id, area_m2)
+  density = min(area_m2 / 100.0, 1.0) × 100
+  base_dv = 15.0 · ln(1 + density)
+  return clip(base_dv, 0, 100)
+
+Severity Classification:
+  - Pothole:
+    diameter_mm >= 750 OR depth_mm > 50    -> "HIGH" (ghana_rating=7)
+    depth_mm > 25 OR diameter_mm >= 300    -> "MEDIUM" (ghana_rating=4)
+    else                                  -> "LOW" (ghana_rating=2)
+  - Crack (class 2):
+    width_mm > 10 -> HIGH (7), width_mm > 3 -> MEDIUM (4), else LOW (2)
+  - Rutting/Shoving (6,7):
+    area_m2 > 0.5 -> HIGH (7), area_m2 > 0.1 -> MEDIUM (4), else LOW (2)
+  - Others:
+    area_m2 > 1.0 -> HIGH (7), area_m2 > 0.2 -> MEDIUM (4), else LOW (2)
+
+METHOD: process_video_astm(video_path, gps_points, target_fps=15.0)
+  1. Open video with cv2.VideoCapture
+  2. Get: original_fps, width, height, total_frames
+  3. FPS flag per MDPI paper:
+     - fps >= 15 -> "OK"
+     - fps >= 10 -> "LOW_FPS"
+     - else      -> "INSUFFICIENT"
+  4. Create GPS interpolator (linear interpolation of lat/lon by timestamp)
+  5. Frame interval = max(1, int(original_fps / target_fps))
+  6. For each sampled frame:
+     a. Undistort frame
+     b. Get GPS position via interpolator
+     c. Run YOLO detection: results = model(frame, verbose=False)
+     d. For each detection box:
+        - Extract class_id, confidence, xyxy bbox
+        - Compute real-world dimensions via pinhole model
+        - Compute ASTM name, Ghana name, defect name
+        - Compute deduct value: dv = 15·ln(1 + density)
+        - Chainage = timestamp × 10.0 (assumes 10 m/s = 36 km/h)
+        - Store detection in list
+
+Depth Estimation Integration (vision_service.py):
+  - DepthAnythingV2Estimator: Dense inverse depth estimation (vits/vitb/vitl encoders)
+  - GeometryAnchoredDepthScaler: Converts inverse depth to metric depth using ground plane geometry
+  - MBTPAreaEstimator: Minimum Bounding Triangulated Pixel method for pothole depth
+  - RobustPotholeSegmentor: RGB-based segmentation fallback for water-filled potholes
+
+METHOD: process_video_with_depth()
+  - Same as process_video_astm but adds:
+    a. Dense depth estimation every 30 frames or first frame
+    b. Geometry-anchored metric depth scaling
+    c. MBTP pothole depth estimation for class 4 (Pothole)
+    d. Dense depth extraction per bbox using median depth
+
+================================================================================
+8. DEPTH ESTIMATION INTEGRATION
+================================================================================
+
+This project integrates advanced depth estimation for pothole measurement:
+
+8.1 DEPTHANYTHINGV2 (app/services/dav2e.py)
+---------------------------------------------
+CLASS: DepthAnythingV2Estimator
+
+Model architectures:
+  - vits: onnx-community/depth-anything-v2-small
+  - vitb: onnx-community/depth-anything-v2-base
+  - vitl: onnx-community/depth-anything-v2-large
+
+METHOD: estimate(image)
+  - Converts BGR to RGB, creates PIL image
+  - Processes via HuggingFace processor
+  - Returns: depth map (H×W float32) - RELATIVE inverse depth
+    - Higher values = closer (inverse depth convention)
+
+METHOD: bbox_relative_depth(depth_map, bbox)
+  - Extracts median relative depth from bbox region
+  - Returns: float (relative depth units, not metric)
+
+METHOD: bbox_relative_dims(depth_map, bbox, fx, fy)
+  - Converts relative depth to real-world width/length using pinhole:
+    depth_m = median(roi)
+    width_m = (w_px · depth_m) / fx
+    length_m = (h_px · depth_m) / fy
+
+8.2 GEOMETRY-ANCHORED DEPTH SCALER (app/services/geom_anchor.py)
+-----------------------------------------------------------------
+CLASS: GeometryAnchoredDepthScaler
+
+Purpose: Convert relative inverse depth to METRIC depth using ground plane geometry
+
+Constructor params:
+  - camera_height_m (default 1.5)
+  - pitch_deg (default 0)
+  - roll_deg (default 0)
+  - fx, fy, cx, cy (camera intrinsics)
+
+METHOD: compute_ground_plane(pitch, roll, height) -> (n, d)
+  - Computes ground plane normal n and distance d in camera coordinates
+  - Rotation matrices:
+    Rx (pitch): [[1, 0, 0], [0, cos(-pitch), -sin(-pitch)], [0, sin(-pitch), cos(-pitch)]]
+    Rz (roll):  [[cos(roll), -sin(roll), 0], [sin(roll), cos(roll), 0], [0, 0, 1]]
+  
+  - World to camera rotation: R_w2c = Rz @ Rx
+  - Ground normal: n_world = [0, 0, 1] (pointing up)
+  - n_cam = R_w2c @ n_world
+  - Point on ground: p_ground_world = [0, -height, 0]
+  - p_ground_cam = R_w2c @ p_ground_world
+  - Plane distance: d = -n_cam · p_ground_cam
+
+METHOD: estimate_scale_from_ground_plane(inv_depth, K, ...) -> (scale, shift)
+  1. Compute ground plane normal n and distance d
+  2. Create camera ray directions from pixel coordinates:
+     x_cam = (u - cx) / fx
+     y_cam = (v - cy) / fy
+     rays = [x_cam, y_cam, 1] (normalized)
+  3. Intersect rays with ground plane:
+     n_dot_ray = sum(rays · n_ground)
+     t = -d / n_dot_ray  (metric depth from ground plane intersection)
+  4. Linear regression to find scale/shift:
+     metric_depth = scale × (1/inv_depth) + shift
+     A = [[1/inv_d[0], 1], [1/inv_d[1], 1], ...]
+     [scale, shift] = lstsq(A, metric_depth)
+
+METHOD: apply(inv_depth, K, pitch, roll, height) -> metric_depth
+  1. If not initialized: estimate scale/shift from ground plane
+  2. Apply EMA smoothing to scale/shift:
+     scale = prev_scale × (1 - alpha) + new_scale × alpha
+     shift = prev_shift × (1 - alpha) + new_shift × alpha
+  3. metric_depth = scale / (inv_depth + 1e-6) + shift
+  4. Clip to [0, 100] meters
+
+8.3 MBTP AREA ESTIMATOR (app/services/mbtp_est.py)
+---------------------------------------------------
+CLASS: MBTPAreaEstimator
+
+"Minimum Bounding Triangulated Pixel" method
+
+Purpose: Estimate pothole area, depth, and volume using triangulation
+
+Constructor params:
+  - depth_threshold_m = 0.02  (2cm depth threshold for segmentation)
+  - min_area_pixels = 100
+  - contour_simplification_eps = 0.005
+
+METHOD: segment_pothole_region(depth_map, bbox, ground_ref) -> mask
+  1. Extract ROI from depth_map using bbox
+  2. Determine depth orientation (check if bottom half is deeper than top half)
+  3. Segmentation:
+     If inverted depth: mask = (roi - ground_ref) > threshold
+     Else: mask = (ground_ref - roi) > threshold
+  4. Morphological operations:
+     - Close: cv2.morphologyEx(MORPH_CLOSE, ellipse(5,5))
+     - Open: cv2.morphologyEx(MORPH_OPEN, ellipse(5,5))
+  5. Remove small regions (connectedComponentsWithStats, area < min_area_pixels)
+
+METHOD: compute_contour(mask) -> [contour]
+  - Extract contours with cv2.findContours
+  - Select largest contour
+  - Douglas-Peucker simplification: eps = contour_eps × arcLength
+
+METHOD: triangulate_contour(contour, image_shape) -> (triangles, viz)
+  1. Extract points from contour
+  2. Add centroid for full coverage
+  3. Delaunay triangulation via cv2.Subdiv2D
+  4. Filter triangles whose centroid is outside contour
+
+METHOD: compute_triangle_area(triangle, depth_map, fx, fy, ground_ref) -> area_m2
+  1. Get depths at triangle vertices from depth_map
+  2. Convert to 3D points via pinhole:
+     X = (u - cx) · Z / fx
+     Y = (v - cy) · Z / fy
+     Z = depth at pixel
+  3. Triangle area via cross product:
+     area = 0.5 × |cross(p2-p1, p3-p1)|
+
+METHOD: estimate(rgb_image, depth_map, bbox, K, ground_ref) -> MBTPEstimate
+  1. Compute ground reference (median depth in 10px border ring around bbox, excluding bbox interior)
+  2. Use RobustPotholeSegmentor to segment pothole
+  3. Extract contour
+  4. Triangulate contour -> compute total area (sum of triangle areas)
+  5. Convex hull area for irregularity metric:
+     irregularity = 1 - (total_area / convex_hull_area)
+  6. Volume integration:
+     depth_deficit = max(ground_ref - roi_depth, 0)
+     pixel_area_m2 = (ground_ref/fx) × (ground_ref/fy)
+     volume = Σ(depth_deficit[mask>0]) × pixel_area_m2
+  7. Confidence:
+     method_confidence = {"depth": 0.9, "rgb_water": 0.7, "hybrid": 0.8, fallback: 0.5}
+     confidence = method_conf × min(1, total_area / (hull_area + 0.001))
+
+MBTPEstimate dataclass fields:
+  - area_m2, perimeter_m, depth_m, volume_m3
+  - convex_hull_area_m2
+  - irregularity_score
+  - confidence
+  - contour_points: List[List[float]]
+  - triangulation_map: Optional[np.ndarray]
+
+8.4 RGB SEGMENTATION (app/services/rgbsegment.py)
+---------------------------------------------------
+CLASS: RobustPotholeSegmentor
+
+Method: segment_pothole(rgb_image, depth_map, bbox, ground_ref) -> (mask, method)
+  Multi-modal segmentation fallback chain:
+  1. Depth-based segmentation (if depth_map available)
+  2. RGB water-filled pothole detection (HSV color space filtering)
+  3. Hybrid (combine depth + RGB)
+  4. Bounding box fallback
+
+================================================================================
+9. SFM-BASED DEPTH SERVICE (app/services/depth_service.py)
+================================================================================
+
+CLASS: DepthEstimationService
+
+Purpose: Structure-from-Motion (SfM) based depth estimation with RANSAC plane fitting
+         and temporal EMA smoothing
+
+Constants:
+  MIN_OBSERVATIONS = 2
+  MIN_MATCHES = 30
+  MIN_INLIERS = 20
+  MIN_PLANE_POINTS = 15
+  MIN_DEFECT_POINTS = 5
+  _alpha = 0.35  (EMA smoothing factor)
+
+METHOD: estimate_track_depth(observations, camera_matrix, camera_height_meters, track_id)
+  -> DepthEstimationResult
+
+Steps:
+  1. Check len(observations) >= MIN_OBSERVATIONS (else "insufficient observations")
+  2. Select first and last observation pair for baseline
+  3. Blur rejection via Variance of Laplacian:
+     blur_score = cv2.Laplacian(gray, CV_64F).var()
+     If blur_score < 80.0: reject frame ("motion blur")
+  4. Feature matching (ORB + BFMatcher with ratio 0.75):
+     - orb = cv2.ORB_create(3000)
+     - Detect keypoints and descriptors
+     - Match with knnMatch(k=2)
+     - Apply Lowe's ratio: m.distance < 0.75 × n.distance
+  5. Essential matrix estimation:
+     essential = cv2.findEssentialMat(pts1, pts2, K, method=RANSAC, prob=0.999, threshold=1.0)
+  6. Pose recovery:
+     _, R, t, pose_mask = cv2.recoverPose(essential, pts1, pts2, K, mask=inlier_mask)
+  7. Triangulation:
+     P1 = K @ [I | 0]  (identity)
+     P2 = K @ [R | t]  (second pose)
+     homog = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
+     pts3d = homog[:3] / homog[3]  (normalize homogeneous)
+  8. Filter by z > 0 and isfinite
+  9. Split points into road vs defect using polygon/bbox masking
+  10. RANSAC Plane Fitting on road points:
+      - 80 iterations
+      - Sample 3 random points
+      - Compute normal: n = cross(p2-p1, p3-p1), normalize
+      - Compute d = -n · p1
+      - Inliers: |n · pt + d| < 0.05 (5cm tolerance)
+      - Select best (most inliers)
+  11. Scale computation:
+      camera_to_plane = |plane_d| / |plane_n|
+      scale = camera_height_meters / camera_to_plane
+  12. Depth computation:
+      dist = (defect_pts @ plane_n + plane_d) / |plane_n|
+      depth_mm = |dist| × scale × 1000
+      depth_mm = depth_mm[isfinite(depth_mm)]
+  13. 95th percentile for max_depth, mean for mean_depth
+  14. Temporal EMA smoothing (if track_id provided):
+      max_depth = ema(prev_max_depth, max_depth, alpha=0.35)
+      ema(prev, new) = prev × (1-alpha) + new × alpha
+  15. Confidence:
+      confidence = min(matches/120, 1) × 0.3
+                 + min(inliers/80, 1) × 0.3
+                 + min(defect_pts/12, 1) × 0.2
+                 + min(road_pts/40, 1) × 0.2
+
+DepthEstimationResult fields:
+  - max_depth_mm, mean_depth_mm, confidence, method="sfm_ransac_plane_ema"
+  - matched_points, inlier_points, defect_points, road_plane_points
+
+================================================================================
+10. ASTM PCI CALCULATOR (app/services/astm_pci.py)
+================================================================================
+
+CLASS: ASTMD6433PCI
+
+Reference: MDPI Sensors 2024 paper (Ibragimov et al.) + ASTM D6433-18
+
+Constants:
+  SECTION_LENGTH_M = 50.0    (standard ASTM section length)
+  LANE_WIDTH_M = 3.25        (lane width per paper)
+  SECTION_AREA_M2 = 50.0 × 3.25 = 162.5 m²
+
+YOLO to AASHTO mapping (same as vision service)
+
+DV (Deduct Value) Polynomial Coefficients:
+  DV = a × density² + b × density + c  (per distress type, per severity)
+
+  Distress Type    | Severity  | a | b | c
+  ----------------|-----------|---|---|---
+  Alligator        | Low       | 0.0002 | 0.015 | 0.5
+  Alligator        | Medium    | 0.0005 | 0.040 | 1.0
+  Alligator        | High      | 0.0010 | 0.080 | 2.0
+  Patching         | Low       | 0.0001 | 0.010 | 0.3
+  Patching         | Medium    | 0.0003 | 0.025 | 0.8
+  Patching         | High      | 0.0006 | 0.050 | 1.5
+  Longitudinal     | Low       | 0.00005 | 0.005 | 0.2
+  Longitudinal     | Medium    | 0.00015 | 0.020 | 0.5
+  Longitudinal     | High      | 0.00030 | 0.040 | 1.0
+  Transverse       | (same as Longitudinal)
+  Potholes         | Low       | 0.0005 | 0.020 | 0.5
+  Potholes         | Medium    | 0.0015 | 0.060 | 2.0
+  Potholes         | High      | 0.0030 | 0.120 | 5.0
+  Ravelling        | Low       | 0.0001 | 0.010 | 0.3
+  Ravelling        | Medium    | 0.0003 | 0.025 | 0.8
+  Ravelling        | High      | 0.0006 | 0.050 | 1.5
+  Rutting          | (same as Ravelling)
+  Shoving          | (same as Ravelling)
+  Bleeding         | Low       | 0.00005 | 0.005 | 0.2
+  Bleeding         | Medium    | 0.00015 | 0.020 | 0.5
+  Bleeding         | High      | 0.00030 | 0.040 | 1.0
+  Corrugation      | Low       | 0.0001 | 0.010 | 0.3
+  Corrugation      | Medium    | 0.0003 | 0.025 | 0.8
+  Corrugation      | High      | 0.0006 | 0.050 | 1.5
+  Depression       | Low       | 0.0005 | 0.020 | 0.5
+  Depression       | Medium    | 0.0015 | 0.060 | 2.0
+  Depression       | High      | 0.0030 | 0.120 | 5.0
+
+CDV (Corrected DV) Polynomial Coefficients:
+  CDV = a × TDV² + b × TDV + c  (per distress type)
+
+  Alligator:        a=0.008, b=0.85, c=2.0
+  Patching:         a=0.005, b=0.90, c=1.0
+  Longitudinal:     a=0.003, b=0.95, c=0.5
+  Transverse:       a=0.003, b=0.95, c=0.5
+  Potholes:         a=0.006, b=0.88, c=1.5
+  Ravelling:        a=0.004, b=0.92, c=0.8
+  Rutting:          a=0.004, b=0.92, c=0.8
+  Shoving:          a=0.004, b=0.92, c=0.8
+  Bleeding:         a=0.003, b=0.95, c=0.5
+  Corrugation:      a=0.004, b=0.92, c=0.8
+  Depression:       a=0.006, b=0.88, c=1.5
+
+Correction Factors for Number of Distress Types:
+  1 type:  1.00
+  2 types: 0.85
+  3 types: 0.72
+  4 types: 0.60
+  5+ types: 0.52
+
+METHOD: get_severity_from_width(distress_type, width_mm) -> SeverityLevel
+  - Longitudinal/Transverse cracks:
+    width < 5mm -> Low, < 20mm -> Medium, else High
+  - Alligator/Potholes/Depression:
+    width < 300mm -> Low, < 750mm -> Medium, else High
+  - Ravelling/Rutting/Shoving:
+    width < 100mm -> Low, < 500mm -> Medium, else High
+  - Patching:
+    width < 200mm -> Low, < 500mm -> Medium, else High
+  - Bleeding/Corrugation:
+    width < 100mm -> Low, else Medium
+
+METHOD: compute_density(distress, section_area_m2) -> float
+  Density = (distress_amount / section_area) × 100  (ASTM D6433 Eq 8)
+
+  Where distress_amount depends on type:
+    - Linear (cracks): amount = length_m
+    - Area (alligator, patching, ravelling, rutting, shoving, bleeding, corrugation): amount = area_m2
+    - Count-based (potholes, depression): amount = count × typical_area
+      Potholes: length_m × 0.1
+      Depression: length_m × 0.5
+
+METHOD: get_dv(distress_type, severity, density) -> float
+  a, b, c = DV_COEFFICIENTS[distress_type][severity]
+  DV = a × density² + b × density + c
+  return max(0, DV)
+
+METHOD: get_cdv(distress_type, tdv) -> float
+  a, b, c = CDV_COEFFICIENTS[distress_type]
+  CDV = a × TDV² + b × TDV + c
+  return max(0, CDV)
+
+METHOD: compute_section_pci(section) -> Dict
+  1. Group distresses by type
+  2. For each type:
+     - Sum DVs: TDV = Σ DV_i (per distress instance)
+     - Compute CDV: cdv = get_cdv(distress_type, TDV)
+     - Add to total_cdv
+  3. Apply multi-distress correction:
+     corrected_cdv = total_cdv × CORRECTION_FACTORS[min(n_types, 5)]
+  4. PCI = max(0, min(100, 100 - corrected_cdv))
+
+PCI Rating Classes (ASTM D6433-18 Table 2):
+  86-100:  Good
+  71-85:   Satisfactory
+  56-70:   Fair
+  41-55:   Poor
+  26-40:   Very Poor
+  11-25:   Serious
+  0-10:    Failed
+
+METHOD: compute_pci_from_detections(detections, total_length_m, ...) -> Dict
+  1. Create 50m sections
+  2. For each section, filter detections by chainage
+  3. Convert YOLO detections to Distress objects:
+     - Linear distress: length_m = area_m2 / width_m
+     - Count-based: length_m = 1.0 (each detection = 1 count)
+     - Area-based: length_m = 0
+     - width_mm = width_m × 1000
+  4. Compute PCI per section via compute_section_pci
+  5. Overall PCI = mean of section PCIs
+
+================================================================================
+11. FUSION SERVICE (app/services/fusion_service.py)
+================================================================================
+
+CLASS: PavementConditionFusioneer
+
+Purpose: Fuses inertial IRI + vision DV into PCI for both pipelines
+
+Ghana Distress Weights (Ghana Manual 2023 Table 3):
+  Potholes:              1.0
+  Alligator Cracking:    0.9
+  Rutting:               0.8
+  Patching:              0.7
+  Corrugation/Shoving:   0.7
+  Ravelling:             0.6
+  Longitudinal Cracking: 0.5
+  Transverse Cracking:   0.5
+  Bleeding/Flushing:     0.4
+  Subgrade Failure:      1.0
+
+Roadessy Correction Factor: 1.2 (prototype, verify against RMM manual)
+
+METHOD: _compute_vision_pci(tracking_registry) -> (pci, breakdown)
+  1. Collect all deduct_values from tracking registry
+  2. Quality DV = those >= 5.0
+  3. total_dv = sum(deduct_values)
+  4. factor = CORRECTION_FACTORS[min(q_count, 5)]
+  5. corrected_dv = total_dv × factor
+  6. vision_pci = max(0, 100 - corrected_dv)
+
+METHOD: _compute_astm_pci(astm_qcm, astm_vision) -> (pci, breakdown)
+  1. Delegates to ASTMD6433PCI.compute_pci_from_detections()
+  2. Uses astm_vision.detections with total_distance from astm_qcm
+  3. Returns ASTM PCI (IRI reported separately)
+
+METHOD: _compute_roadessy_pci(simple_iri, simple_segments, roadessy_vision) -> (pci, breakdown)
+  1. Aggregate detections by Ghana distress type
+  2. For each type:
+     - avg_rating = mean(ghana_ratings)
+     - weight = _GHANA_DISTRESS_WEIGHTS[type]
+     - contribution = avg_rating × weight
+  3. dv_sum = Σ contributions
+  4. corrected_dv = dv_sum × ROADESSY_CORRECTION_FACTOR (1.2)
+  5. pci = max(0, min(100, 100 - corrected_dv))
+
+METHOD: compute_astm_pipeline(astm_qcm, astm_vision, run_id) -> Dict
+  Returns ASTM pipeline result with:
+  - astm_pci, qcm_iri_m_km, quality_flags, upsampling_info
+  - segment_pci_50m (50m segment level PCI)
+
+METHOD: compute_roadessy_pipeline(simple_result, roadessy_vision, run_id) -> Dict
+  Returns Roadessy pipeline result with:
+  - roadessy_pci, simple_iri_m_km
+  - segment_pci_50m
+
+================================================================================
+12. SPATIAL & MAP MATCHING SERVICE (app/services/spatial_service.py)
+================================================================================
+
+CLASS: SpatialService
+
+Coordinate Systems:
+  - WGS84 (EPSG:4326) for input/output
+  - UTM projection for metric calculations
+
+METHOD: wgs84_to_utm(lon, lat) -> (easting, northing, zone, hemisphere)
+  zone = min(60, max(1, int((lon + 180) / 6) + 1))
+  hemisphere = "north" if lat >= 0 else "south"
+  epsg = (32600 if lat >= 0 else 32700) + zone
+  Uses pyproj.Transformer from EPSG:4326 to EPSG:{epsg}
+
+METHOD: compute_linear_chainage(coords_df) -> chainage_m
+  Haversine cumulative distance:
+  a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+  distance = 2 × 6371000 × arcsin(√a)
+  chainage = cumsum(distances)
+
+METHOD: map_match_trajectory(gps_df, centerline_wkt, road_id, db, max_distance_m=100)
+  1. Extract valid GPS points (lat/lon in valid ranges)
+  2. Build trajectory LineString
+  3. If db provided and road_id: fetch centerline from gh_roads table
+  4. Transform to metric coordinates (UTM)
+  5. For each GPS point:
+     - Find nearest point on centerline (Shapely nearest_points)
+     - Compute distance from point to centerline
+     - Compute chainage via centerline.project(snapped_point)
+     - Mark matched if distance <= max_distance_m
+  6. Returns snapped coordinates with chainage
+
+Haversine distance (for trajectory slicing):
+  a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+  c = 2·atan2(√a, √(1-a))
+  distance = 6371000 × c
+
+SQL for finding nearest road:
+  CTE trajectory AS (SELECT ST_SetSRID(ST_GeomFromText(:trajectory_wkt), 4326) AS geom)
+  SELECT g.gid FROM gh_roads g, trajectory t
+  WHERE ST_DWithin(g.geom::geography, t.geom::geography, :max_distance_m)
+  ORDER BY ST_Distance(g.geom::geography, t.geom::geography) ASC LIMIT 1
+
+================================================================================
+13. HEAVY COMPUTE PIPELINE ORCHESTRATOR (app/services/heavy_compute.py)
+================================================================================
+
+CLASS: HeavyComputePipeline
+
+Purpose: Orchestrates end-to-end multi-modal road survey analysis
+
+Output Base Directory: F:\Adubofour\rodeessy_mphil\RoadSurveyOutputs\{run_id}\
+
+Pipeline Steps:
+  1. Load GPS data (_load_gps_data)
+     - CSV with column mappings (latitude->lat, Longitude->lon, etc.)
+     - Handle datetime parsing with fallback to RecIntvl
+
+  2. Load vibration data (_load_vibration_data)
+     - Handles Timestamp/LinAccelZ columns
+     - Supports RecIntvl for timestamp conversion
+     - Graceful fallback to synthetic data on missing file
+
+  3. Resolve camera calibration (_resolve_camera_calibration)
+     - Query CalibrationProfile from database
+     - Defaults: height=1.5m, tilt=15°, fx=fy=1000, cx=960, cy=540
+     - Returns distortion coefficients if available
+
+  4. Initialize components:
+     - DepthAnythingV2Estimator (optional, for dense depth)
+     - GeometryAnchoredDepthScaler (for metric depth conversion)
+     - MBTPAreaEstimator (for pothole depth)
+     - RobustPotholeSegmentor (RGB fallback segmentation)
+     - EnhancedDimensionFusionEngine (dimension fusion)
+     - IMUProcessor (IMU pose tracking)
+     - DepthEstimationService (SfM-based depth fallback)
+
+  5. Process Inertial - BOTH methods:
+     a. Simple IRI: InertialRefineryService.process_vibration_data()
+        - Uses GPS Haversine distance
+        - ST1-ST5b preprocessing
+     b. ASTM QCM: InertialRefineryService.process_astm_qcm()
+        - 100Hz upsampling
+        - Quarter-car simulation at 80 km/h
+        - Quality flags
+
+  6. Process Spatial GPS & Map-Matching (shared):
+     SpatialService.map_match_trajectory(gps_df, road_id, db)
+
+  7. Process Video Stream -> Vision:
+     a. ASTM Vision: VisionAnalysisService.process_video_astm()
+        - YOLOv11 detection at target_fps=15
+        - Pinhole geometry for dimensions
+        - GBP (Ghana Board of Psycho) ratings
+     b. Dense Depth (if DAV2E available):
+        - Read first frame
+        - Run DepthAnythingV2 for inverse depth map
+     c. MBTP Pothole Depth:
+        - For each pothole detection (class 4)
+        - Run MBTPAreaEstimator.estimate()
+        - Update detection with area, depth, volume
+     d. Roadessy Vision: reuses ASTM detections with Ghana mapping
+
+  8. Run BOTH pipelines:
+     a. Pipeline 1 (ASTM): PavementConditionFusioneer.compute_astm_pipeline()
+     b. Pipeline 2 (Roadessy): PavementConditionFusioneer.compute_roadessy_pipeline()
+
+  9. Persist to Database (_persist_db_records):
+     - SurveyRun with both PCI values
+     - MapMatchingRun record
+     - IRISegment records (50m segments)
+     - TrackedDefect records
+
+  10. Save ALL outputs:
+     - iri_segments/simple_iri_50m.csv
+     - iri_segments/astm_qcm_iri_50m.csv
+     - pci_segments/astm_segment_pci_50m.csv
+     - pci_segments/roadessy_segment_pci_50m.csv
+     - vision_detections/detections_all.csv (by ASTM and Ghana types)
+     - vision_detections/video_quality_report.json
+     - vision_detections/frame_sampling_info.json
+     - fusion_results/pipeline_1_astm.json
+     - fusion_results/pipeline_2_roadessy.json
+     - map_matching/snapped_coords.csv
+     - map_matching/map_match_summary.json
+     - gps_trajectory.csv
+     - run_summary.json
+
+  11. Cleanup workspace files (delete uploaded input files)
+
+================================================================================
+14. API ROUTES (app/api/routes/analysis.py)
+================================================================================
+
+Router prefix: /analysis
+
+Endpoints:
+  POST /analysis/calibrate-checkerboard
+    - Camera calibration from checkerboard images
+    - Uses cv2.calibrateCamera with OpenCV
+    - Returns camera matrix, distortion coefficients
+
+  POST /analysis/test-inertial-compare
+    - Isolated inertial processing
+    - Returns BOTH simple IRI and ASTM QCM IRI side-by-side
+
+  POST /analysis/test-inertial
+    - Isolated simple displacement IRI only
+
+  GET /analysis/runs/geojson
+    - All survey run trajectories as GeoJSON FeatureCollection
+
+  GET /analysis/iri/segments/geojson
+    - IRI segments with PCI classification as GeoJSON
+
+  GET /analysis/runs/latest
+    - Most recent survey run summary
+
+  GET /analysis/runs/{run_id}
+    - Full run summary with IRI segments
+
+  GET /analysis/runs/{run_id}/map-matching
+    - Map-matching results for a run
+
+  GET /analysis/runs
+    - List of recent survey runs
+
+  GET /analysis/roads
+    - Road centerlines with latest survey metrics (GeoJSON)
+
+  GET /analysis/roads/gh
+    - Ghana road network (gh_roads table) with survey metrics
+
+  GET /analysis/runs/{run_id}/defects
+    - All tracked defects for a run
+
+  GET /analysis/runs/{run_id}/defects/{track_id}/image
+    - Defect image file download
+
+  GET /analysis/runs/{run_id}/iri
+    - IRI segment data for a run
+
+  POST /analysis/test-vision
+    - Isolated vision processing (YOLO detection without database commit)
+
+  POST /analysis/process
+    - Full pipeline execution (ASTM + Roadessy)
+    - Accepts: video, GPS, vibration, calibration metadata
+    - Returns run_id, output_dir, both pipeline results
+
+================================================================================
+15. DATABASE MIGRATIONS SUMMARY (alembic/versions/)
+================================================================================
+
+10 migration files tracked, showing schema evolution:
+
+1. Initial schema creation
+2. Added astm_pci, simple_iri, roadessy_pci columns to survey_runs
+3. Added astm_qcm_iri and quality tracking columns
+4. Added IRI segment tracking (simple_iri, astm_qcm_iri, astm_pci_segment, roadessy_pci_segment)
+5. Added TrackedDefect table with depth estimation fields
+6. Added MapMatchingRun table for spatial results
+7. Added distortion_coefficients to CalibrationProfile
+8. Added processing_metadata JSON for full pipeline results
+9. Added Ghana-specific distress type columns
+10. Final schema with composite indexes and unique constraints
+
+Key tables: survey_runs, map_matching_runs, iri_segments, tracked_defects, gh_roads, calibration_profiles
+
+================================================================================
+16. LOGGING ARCHITECTURE (app/core/logger.py)
+================================================================================
+
+Multi-handler logging with domains:
+
+  - app_logger: General application logging
+  - pipeline_logger: Heavy compute pipeline stages
+  - error_logger: Error tracking
+  - iri_logger: IRI computation stages
+  - vision_logger: Vision/depth estimation
+  - spatial_logger: Map matching operations
+  - fusion_logger: PCI fusion computations
+
+Monitor decorator: @monitor(stage="...", domain="...")
+  - Tracks execution time
+  - Logs metrics per stage
+
+================================================================================
+17. KEY FORMULAS REFERENCE
+================================================================================
+
+A. IRI CALCULATION (Simple Method)
+  IRI = Σ|Δvertical_displacement| / distance_km  (m/km)
+  Segment IRI = Σ|Δvert_disp| / (segment_distance_m / 1000)
+
+B. IRI CALCULATION (ASTM QCM Quarter-Car Model)
+  State: x = [sprung_disp, sprung_vel, unsprung_disp, unsprung_vel]
+  dx/dt = f(x, zr):
+    dx1/dt = x2
+    dx2/dt = (-ks·(x1-x3) - cs·(x2-x4)) / ms
+    dx3/dt = x4
+    dx4/dt = (ks·(x1-x3) + cs·(x2-x4) - kt·(x3-zr)) / mu
+  RK4:
+    k1 = f(x, zr)
+    k2 = f(x + 0.5·dt·k1, zr)
+    k3 = f(x + 0.5·dt·k2, zr)
+    k4 = f(x + dt·k3, zr)
+    x_next = x + (dt/6)·(k1 + 2k2 + 2k3 + k4)
+  IRI = Σ|x2 - x4|·dt / total_distance · 1000 (mm/m)
+
+C. QUARTER-CAR PARAMETERS (Golden Car)
+  ms = 250 kg, mu = 30 kg, ks = 63300 N/m, kt = 653000 N/m, cs = 6000 N·s/m
+  v_ref = 80 km/h = 22.22 m/s
+  dx = 0.025 m, fs = 100 Hz
+
+D. PINHOLE CAMERA MODEL (Vision Dimensions)
+  angle_y = atan2((y_center - cy), fy)
+  z_m = camera_height_m / sin(tilt + angle_y)
+  width_m = (pixel_width · z_m) / fx
+  length_m = (pixel_height · z_m) / fy
+  area_m2 = width_m · length_m
+
+E. Haversine Distance (Travel Distance)
+  a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+  c = 2·atan2(√a, √(1-a))
+  distance = 6371000 · c
+
+F. Deduct Value (DV) Polynomial (ASTM D6433)
+  DV = a × density² + b × density + c
+  density = (distress_amount / section_area) × 100
+
+G. Corrected DV (CDV) Polynomial
+  CDV = a × TDV² + b × TDV + c
+
+H. Multi-Distress Correction
+  corrected_dv = total_dv × correction_factor
+  correction_factor based on number of distress types (1: 1.00, 2: 0.85, 3: 0.72, 4: 0.60, 5+: 0.52)
+
+I. PCI Calculation
+  ASTM PCI = 100 - corrected_DV_sum
+  Roadessy PCI = 100 - (DV_sum × 1.2)
+
+J. SfM Depth Estimation
+  P1 = K @ [I | 0], P2 = K @ [R | t]
+  homog = triangulatePoints(P1, P2, pts1, pts2)
+  pts3d = homog[:3] / homog[3]
+  plane: n·x + d = 0, scale = camera_height / |d|/|n|
+  depth_mm = |dist| · scale · 1000
+  EMA: max_depth = prev × (1-α) + new × α  (α=0.35)
+
+K. Ground Plane Intersection (Geometry Anchor)
+  Ray: p = t · dir, where dir = [(u-cx)/fx, (v-cy)/fy, 1]
+  Plane: n·p + d = 0
+  t = -d / (n·dir)  (metric depth)
+  Linear regression: metric_depth = scale × (1/inv_depth) + shift
+
+L. MBTP Triangle Area
+  X = (u - cx) · Z / fx
+  Y = (v - cy) · Z / fy
+  Z = depth at pixel
+  area = 0.5 × |cross(p2-p1, p3-p1)|
+
+M. MBTP Volume
+  depth_deficit = max(ground_ref - depth, 0)
+  pixel_area_m2 = (ground_ref / fx) × (ground_ref / fy)
+  volume = Σ(depth_deficit[pothole_pixels]) × pixel_area_m2
+
+N. Blur Detection (Laplacian Variance)
+  blur_score = Var(Laplacian(gray, CV_64F))
+  Threshold: < 80 → frame rejected
+
+O. Feature Matching Quality
+  Lowe's ratio: m.distance < 0.75 × n.distance
+
+P. Confidence Score (SfM Depth)
+  confidence = min(m/120, 1)×0.3 + min(inl/80, 1)×0.3 + min(d/12, 1)×0.2 + min(r/40, 1)×0.2
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+Generated from analysis of roadessy_web_backend source code.

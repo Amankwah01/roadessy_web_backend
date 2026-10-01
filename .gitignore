@@ -29,7 +29,6 @@ Thumbs.db
 .env.*.local
 .env.example
 
-
 # Uploaded survey videos
 app/api/storage/
 
@@ -61,3 +60,7 @@ db_backup/
 outputs/
 results/
 runs/
+
+# Test scratch directories (pytest tmp_path roots used by the GPS loader tests)
+.pytest-tmp*/
+.pytest_cache/

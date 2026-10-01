@@ -27,7 +27,7 @@ F:\roadessy_mhil\
   roadessy-frontend\
 ```
 
-Place the YOLO weights where the configured model path expects them. The repository includes `best.pt` and `app/defect.pt`; verify which one `DEFAULT_MODEL_PATH` selects before production use. Never commit private recordings, credentials, or large replacement weights without an explicit storage policy.
+Place the YOLO weights at `data/models/defect.pt` — that single path is what `DEFAULT_MODEL_PATH` resolves to and what both detection scripts default to. Do not add a second checkpoint to `data/models/`: the service keys every downstream stage on class index, so a model with a different class order loads cleanly and mislabels its output, and the service now refuses such a model. Never commit private recordings, credentials, or large replacement weights without an explicit storage policy.
 
 ## 3. Backend setup
 
