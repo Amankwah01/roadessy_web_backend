@@ -101,7 +101,7 @@ class EnhancedDimensionFusionEngine:
         # Method 3: Depth map pinhole (fallback)
         if abs_depth is not None and "mbtp" not in results:
             try:
-                from app.services.dav2e import DepthAnythingV2Estimator
+                from app.services.vision.depth.dav2e import DepthAnythingV2Estimator
                 d_m = DepthAnythingV2Estimator.bbox_relative_depth(abs_depth, bbox)
                 if d_m > 0:
                     depth_val = d_m
@@ -169,7 +169,7 @@ class EnhancedDimensionFusionEngine:
         roi_depth = abs_depth[y1:y2, x1:x2]
         roi_mask = np.ones_like(roi_depth, dtype=bool)
         ground_ref = float(np.median(abs_depth))
-        pixel_area = (depth_val / 1000.0 / self.fx) * (depth_val / 1000.0 / self.fy) if depth_val > 0 else 0.001
+        pixel_area = (depth_val / self.fx) * (depth_val / self.fy) if depth_val > 0 else 0.001
         depth_deficit = np.maximum(ground_ref - roi_depth, 0)
         return float(np.sum(depth_deficit[roi_mask > 0]) * pixel_area)
 

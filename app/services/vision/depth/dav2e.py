@@ -12,15 +12,20 @@ from PIL import Image
 
 class DepthAnythingV2Estimator:
 
+    # The official `-hf` repos, not `onnx-community/*`. The onnx-community
+    # mirrors publish ONNX graphs only, so from_pretrained finds no
+    # pytorch_model.bin or model.safetensors and raises. These carry
+    # model.safetensors and are tagged model_type "depth_anything", which is
+    # what transformers 5.x expects.
     MODEL_CONFIGS = {
         "vits": {
-            "model_id": "onnx-community/depth-anything-v2-small",
+            "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
         },
         "vitb": {
-            "model_id": "onnx-community/depth-anything-v2-base",
+            "model_id": "depth-anything/Depth-Anything-V2-Base-hf",
         },
         "vitl": {
-            "model_id": "onnx-community/depth-anything-v2-large",
+            "model_id": "depth-anything/Depth-Anything-V2-Large-hf",
         },
     }
 
@@ -31,15 +36,31 @@ class DepthAnythingV2Estimator:
         model_path: Optional[str] = None,
     ):
         try:
+            # transformers 5.x renamed the class: the V2-suffixed name is gone and
+            # the V2 checkpoints were re-tagged with model_type "depth_anything".
+            # The fallback keeps older pinned versions working, so this is not a
+            # reason to downgrade transformers.
             from transformers import (  # type: ignore[import-not-found]
-                DepthAnythingV2ForDepthEstimation,  # type: ignore[attr-defined]
+                DepthAnythingForDepthEstimation,  # type: ignore[attr-defined]
                 AutoImageProcessor,  # type: ignore[attr-defined]
             )
-        except ImportError:
-            raise ImportError(
-                "transformers is required for DepthAnythingV2. "
-                "Install with: pip install transformers"
-            )
+        except ImportError as new_name_error:
+            try:
+                from transformers import (  # type: ignore[import-not-found]
+                    DepthAnythingV2ForDepthEstimation,  # type: ignore[attr-defined]
+                    AutoImageProcessor,  # type: ignore[attr-defined]
+                )
+            except ImportError:
+                # Surface the real reason. Reporting "install transformers" here
+                # is what hid this: transformers was installed the whole time, and
+                # the pipeline quietly ran with depth estimation switched off.
+                raise ImportError(
+                    "Could not import the DepthAnythingV2 model class from "
+                    f"transformers ({new_name_error}). Either transformers is not "
+                    "installed, or the installed version exposes neither "
+                    "DepthAnythingForDepthEstimation nor the older "
+                    "DepthAnythingV2ForDepthEstimation."
+                ) from new_name_error
 
         if encoder not in self.MODEL_CONFIGS:
             raise ValueError(f"Unsupported encoder: {encoder}")
@@ -58,7 +79,7 @@ class DepthAnythingV2Estimator:
 
         self.model_id = model_path
         self.processor = AutoImageProcessor.from_pretrained(model_path)
-        self.model = DepthAnythingV2ForDepthEstimation.from_pretrained(
+        self.model = DepthAnythingForDepthEstimation.from_pretrained(
             model_path,
             torch_dtype=torch.float32 if self.device == "cpu" else torch.float16,
         ).to(self.device)

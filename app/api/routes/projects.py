@@ -1,7 +1,7 @@
 # app/api/routes/projects.py
 import datetime
 import uuid
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database.session import get_db
 from app.models.organisation import Organisation
-from app.models.survey import SurveyRun, Project, Road, TrackedDefect, MapMatchingRun
+from app.models.survey import SurveyRun, Project, Road, TrackedDefect, MapMatchingRun, IRISegment
 
 router = APIRouter(prefix="/api/me/projects", tags=["Projects & Roads"])
 
@@ -35,6 +35,60 @@ def _geometry_wkt(value):
         except Exception:
             pass
     return str(value)
+
+
+def _project_total_distance_m(db: Session, project_id: uuid.UUID) -> float:
+    """Total surveyed distance for a project, summed from all its runs' IRI segments."""
+    try:
+        # Get all run IDs for this project
+        run_ids = db.query(SurveyRun.run_id).join(Road, Road.id == SurveyRun.road_id).filter(
+            Road.project_id == project_id
+        ).all()
+        run_uuids = [r[0] for r in run_ids]
+        
+        if not run_uuids:
+            return 0.0
+        
+        # Sum the max segment_end_m for each run
+        from sqlalchemy import func as sqlfunc
+        total = db.query(
+            sqlfunc.sum(
+                db.query(sqlfunc.max(IRISegment.segment_end_m))
+                .filter(IRISegment.run_id == SurveyRun.run_id)
+                .correlate(SurveyRun)
+                .scalar_subquery()
+            )
+        ).filter(SurveyRun.run_id.in_(run_uuids)).scalar()
+        
+        return float(total or 0)
+    except Exception:
+        return 0.0
+
+
+def _project_avg_roughness(db: Session, project_id: uuid.UUID) -> float:
+    """Average IRI roughness for a project, weighted by segment length."""
+    try:
+        # Get all run IDs for this project
+        run_ids = db.query(SurveyRun.run_id).join(Road, Road.id == SurveyRun.road_id).filter(
+            Road.project_id == project_id
+        ).all()
+        run_uuids = [r[0] for r in run_ids]
+        
+        if not run_uuids:
+            return 0.0
+        
+        # Weighted average: sum(iri * length) / sum(length)
+        from sqlalchemy import func as sqlfunc
+        result = db.query(
+            sqlfunc.sum(IRISegment.iri_value * (IRISegment.segment_end_m - IRISegment.segment_start_m)),
+            sqlfunc.sum(IRISegment.segment_end_m - IRISegment.segment_start_m)
+        ).filter(IRISegment.run_id.in_(run_uuids)).first()
+        
+        if result and result[1] and result[1] > 0:
+            return float(result[0] / result[1])
+        return 0.0
+    except Exception:
+        return 0.0
 
 
 def _resolve_org_name(db: Session, org_id: str) -> str:
@@ -97,13 +151,10 @@ async def list_projects(
             ).group_by(Road.project_id).all()
             road_counts = {str(r[0]): r[1] for r in road_rows}
             
-            # Run counts and totals
+            # Run counts
             run_rows = db.query(
                 Project.id,
-                func.count(SurveyRun.run_id),
-                func.coalesce(func.sum(SurveyRun.simple_iri), 0),
-                func.coalesce(func.sum(SurveyRun.astm_qcm_iri), 0),
-                func.coalesce(func.sum(SurveyRun.computed_iri), 0)
+                func.count(SurveyRun.run_id)
             ).join(
                 Road, Road.project_id == Project.id
             ).join(
@@ -115,11 +166,16 @@ async def list_projects(
             for r in run_rows:
                 pid = str(r[0])
                 run_counts[pid] = r[1]
-                # Compute average roughness from available IRI fields
-                iri_sum = sum(filter(None, [r[2], r[3], r[4]]))
-                iri_count = sum(1 for v in [r[2], r[3], r[4]] if v is not None)
-                avg_roughness[pid] = iri_sum / iri_count if iri_count > 0 else 0
-                distance_totals[pid] = float(r[2] or 0)  # simple_iri distance
+            
+            # Compute total distance and avg roughness for each project
+            for p in projects:
+                pid = str(p.id)
+                if run_counts.get(pid, 0) > 0:
+                    distance_totals[pid] = _project_total_distance_m(db, p.id)
+                    avg_roughness[pid] = _project_avg_roughness(db, p.id)
+                else:
+                    distance_totals[pid] = 0.0
+                    avg_roughness[pid] = 0.0
         
         results = []
         for p in projects:
@@ -132,6 +188,8 @@ async def list_projects(
                 "visibility": p.visibility,
                 "team_id": str(p.team_id) if p.team_id else None,
                 "team_name": p.team_name,
+                "shared_with_team_ids": p.shared_with_team_ids,
+                "shared_with_org_ids": p.shared_with_org_ids,
                 "can_edit": True,  # TODO: implement permission check
                 "road_count": road_counts.get(pid, 0),
                 "run_count": run_counts.get(pid, 0),
@@ -161,6 +219,9 @@ class CreateProjectRequest(BaseModel):
     visibility: str = "ORG"
     team_id: Optional[str] = None
     team_name: Optional[str] = None
+    # Multi-team/multi-org sharing
+    shared_with_team_ids: Optional[List[str]] = None
+    shared_with_org_ids: Optional[List[str]] = None
     description: Optional[str] = None
     created_by: Optional[str] = None
 
@@ -176,6 +237,8 @@ async def create_project(
     org_name = payload.org_name
     team_id = payload.team_id
     team_name = payload.team_name
+    shared_with_team_ids = payload.shared_with_team_ids
+    shared_with_org_ids = payload.shared_with_org_ids
     description = payload.description
     created_by = payload.created_by
     visibility = payload.visibility
@@ -226,7 +289,18 @@ async def create_project(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Invalid team_id",
                 )
-
+        
+        # Parse shared team IDs
+        shared_team_uuids = None
+        if shared_with_team_ids:
+            try:
+                shared_team_uuids = [uuid.UUID(tid) for tid in shared_with_team_ids]
+            except (ValueError, AttributeError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Invalid shared_with_team_ids",
+                )
+        
         # Get team_name if team_id provided but team_name not given
         if team_uuid is not None and not team_name:
             # Try to find team name from existing projects
@@ -241,6 +315,8 @@ async def create_project(
             visibility=visibility,
             team_id=team_uuid,
             team_name=team_name,
+            shared_with_team_ids=[str(t) for t in shared_team_uuids] if shared_team_uuids else None,
+            shared_with_org_ids=shared_with_org_ids,
             description=description,
             created_by=created_by,
         )
@@ -256,6 +332,8 @@ async def create_project(
             "visibility": project.visibility,
             "team_id": str(project.team_id) if project.team_id else None,
             "team_name": project.team_name,
+            "shared_with_team_ids": project.shared_with_team_ids,
+            "shared_with_org_ids": project.shared_with_org_ids,
             "description": project.description,
             "can_edit": True,
             "road_count": 0,
@@ -290,6 +368,10 @@ async def get_project(project_id: str, db: Session = Depends(get_db)):
     road_count = db.query(func.count(Road.id)).filter(Road.project_id == pid).scalar() or 0
     run_count = db.query(func.count(SurveyRun.run_id)).join(Road, Road.id == SurveyRun.road_id).filter(Road.project_id == pid).scalar() or 0
     
+    # Compute totals
+    total_distance_m = _project_total_distance_m(db, pid) if run_count > 0 else 0.0
+    avg_roughness = _project_avg_roughness(db, pid) if run_count > 0 else 0.0
+    
     return JSONResponse(status_code=status.HTTP_200_OK, content={
         "id": str(project.id),
         "name": project.name,
@@ -298,12 +380,14 @@ async def get_project(project_id: str, db: Session = Depends(get_db)):
         "visibility": project.visibility,
         "team_id": str(project.team_id) if project.team_id else None,
         "team_name": project.team_name,
+        "shared_with_team_ids": project.shared_with_team_ids,
+        "shared_with_org_ids": project.shared_with_org_ids,
         "description": project.description,
         "can_edit": True,
         "road_count": road_count,
         "run_count": run_count,
-        "total_distance_m": 0,  # TODO: compute
-        "avg_roughness": 0,  # TODO: compute
+        "total_distance_m": total_distance_m,
+        "avg_roughness": avg_roughness,
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None,
     })
@@ -322,6 +406,9 @@ class UpdateProjectRequest(BaseModel):
     visibility: Optional[str] = None
     team_id: Optional[str] = None
     team_name: Optional[str] = None
+    # Multi-team/multi-org sharing
+    shared_with_team_ids: Optional[List[str]] = None
+    shared_with_org_ids: Optional[List[str]] = None
 
 
 @router.patch("/{project_id}", response_class=JSONResponse)
@@ -379,6 +466,19 @@ async def update_project(
                 project.visibility = "TEAM"
     if changed.get("team_name") is not None:
         project.team_name = changed["team_name"]
+    if "shared_with_team_ids" in changed:
+        shared_team_ids = changed["shared_with_team_ids"]
+        if shared_team_ids is None:
+            project.shared_with_team_ids = None
+        else:
+            try:
+                project.shared_with_team_ids = [str(uuid.UUID(tid)) for tid in shared_team_ids]
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid shared_with_team_ids"
+                )
+    if "shared_with_org_ids" in changed:
+        project.shared_with_org_ids = changed["shared_with_org_ids"]
     
     project.updated_at = datetime.datetime.utcnow()
     db.commit()
@@ -392,6 +492,8 @@ async def update_project(
         "visibility": project.visibility,
         "team_id": str(project.team_id) if project.team_id else None,
         "team_name": project.team_name,
+        "shared_with_team_ids": project.shared_with_team_ids,
+        "shared_with_org_ids": project.shared_with_org_ids,
         "description": project.description,
         "can_edit": True,
         "created_at": project.created_at.isoformat() if project.created_at else None,

@@ -8,6 +8,14 @@ from typing import Optional, Tuple, List
 from dataclasses import dataclass
 import numpy.typing as npt
 
+from app.core.camera import (
+    DEFAULT_CAMERA_CX,
+    DEFAULT_CAMERA_CY,
+    DEFAULT_CAMERA_FX,
+    DEFAULT_CAMERA_FY,
+    DEFAULT_CAMERA_HEIGHT_M,
+)
+
 FloatArray = npt.NDArray[np.float64]
 
 
@@ -28,13 +36,13 @@ class GeometryAnchoredDepthScaler:
     """
     
     def __init__(self, 
-                 camera_height_m: float = 1.5,
+                 camera_height_m: float = DEFAULT_CAMERA_HEIGHT_M,
                  pitch_deg: float = 0.0,
                  roll_deg: float = 0.0,
-                 fx: float = 1000.0,
-                 fy: float = 1000.0,
-                 cx: float = 960.0,
-                 cy: float = 540.0,
+                 fx: float = DEFAULT_CAMERA_FX,
+                 fy: float = DEFAULT_CAMERA_FY,
+                 cx: float = DEFAULT_CAMERA_CX,
+                 cy: float = DEFAULT_CAMERA_CY,
                  min_confidence: float = 0.1,
                  ema_alpha: float = 0.3):
         """

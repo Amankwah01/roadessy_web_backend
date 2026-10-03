@@ -9,6 +9,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.calibration import router as calibration_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.logs import router as logs_router
+from app.api.routes.me import router as me_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.organisations import (
     router as organisations_router,
@@ -18,11 +19,13 @@ from app.api.routes.projects import roads_router, router as projects_router
 from app.api.routes.runs import me_router as runs_me_router, router as runs_router
 from app.database.session import engine
 from app.database.sync_schema import sync_schema
+from app.core.security import check_oidc_configuration
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     del application  # Unused; tables are created for the bound engine.
+    check_oidc_configuration()
     sync_schema(engine)
     yield
 
@@ -58,6 +61,7 @@ app.include_router(organisations_router)
 app.include_router(teams_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
+app.include_router(me_router)
 
 
 @app.get("/health")

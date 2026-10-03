@@ -18,7 +18,8 @@ import numpy as np
 from app.core.config import (
     ASTM_PCI_DISABLED_REASON,
     ASTM_PCI_ENABLED,
-    ASTM_QCM_IRI_ENABLED,
+    ASTM_TRACK_DISABLED_REASON,
+    ASTM_TRACK_RUNNING,
 )
 from app.core.logger import fusion_logger, monitor
 from app.services.fusion.alignment import (
@@ -481,6 +482,36 @@ class PavementConditionFusioneer:
         indices come from two loggers with independent origins and `alignment`
         says so.
         """
+        if not ASTM_TRACK_RUNNING:
+            # Every figure here is None rather than 0.0. A zero IRI reads as a
+            # measured smooth road, which is the one thing a muted track must not
+            # assert; None reads as "not reported".
+            fusion_logger.warning(
+                f"ASTM track muted: {ASTM_TRACK_DISABLED_REASON}",
+                run_id=run_id,
+            )
+            return {
+                "astm_pci": None,
+                "astm_pci_class": None,
+                "astm_pci_enabled": False,
+                "astm_track_enabled": False,
+                "astm_track_disabled_reason": ASTM_TRACK_DISABLED_REASON,
+                "qcm_iri_m_km": None,
+                "qcm_iri_segments_50m": [],
+                "quality_flags": {
+                    "astm_track_disabled": True,
+                    "pci_provenance": None,
+                },
+                "upsampling_info": {},
+                "breakdown": {
+                    "enabled": False,
+                    "reason": ASTM_TRACK_DISABLED_REASON,
+                    "sections": [],
+                },
+                "segment_pci_50m": [],
+                "alignment": {"aligned": False, "reason": "astm_track_disabled"},
+            }
+
         detections, alignment, placed = cls._align_detections(astm_vision.detections, inertial_track)
         aligned_vision = ASTMVisionResult(
             detections=detections,
@@ -540,10 +571,17 @@ class PavementConditionFusioneer:
             # column as the IRI quality flags rather than beside it, because a
             # stored float with no caveat is what this whole exercise exists to
             # avoid: the number reads as an ASTM result and is not one.
-            "quality_flags": dict(
-                astm_qcm.quality_flags or {},
-                pci_provenance=astm_breakdown.get("provenance"),
-            ),
+            #
+            # ASTMQCMResult.quality_flags is a list of flag names, so it has to be
+            # folded into a mapping here. Calling dict() on the list raised
+            # "dictionary update sequence element #0 has length 17" after 14
+            # minutes of pipeline work, because it read the first flag
+            # ("low_sampling_rate", 17 characters) as a key/value pair. The
+            # frontend types this column as Record<string, boolean>.
+            "quality_flags": {
+                **{str(flag): True for flag in (astm_qcm.quality_flags or [])},
+                "pci_provenance": astm_breakdown.get("provenance"),
+            },
             "upsampling_info": astm_qcm.upsampling_info,
             "breakdown": astm_breakdown,
             "segment_pci_50m": segment_pci,

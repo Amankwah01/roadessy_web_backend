@@ -157,9 +157,12 @@ class Project(Base):
     name = Column(String, nullable=False)
     org_id = Column(String, nullable=False, index=True)
     org_name = Column(String, nullable=False)
-    visibility = Column(String, default="PERSONAL")  # PERSONAL or TEAM
+    visibility = Column(String, default="PERSONAL")  # PERSONAL, ORG, TEAM
     team_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     team_name = Column(String, nullable=True)
+    # JSON arrays for multi-team/multi-org sharing
+    shared_with_team_ids = Column(JSON, nullable=True)  # List of team UUIDs
+    shared_with_org_ids = Column(JSON, nullable=True)   # List of org IDs (strings)
     description = Column(Text, nullable=True)
     created_by = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

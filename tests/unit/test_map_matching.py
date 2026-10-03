@@ -1,260 +1,145 @@
-#!/usr/bin/env python3
+"""A run must not report "matched" when the drive did not follow the road.
+
+One survey selected road 66673 — the nearest candidate — and then matched 10 of
+893 GPS points to its centreline. Because `match_status` was
+`"matched" if matched else "unmatched"`, any single matched point made the whole
+run a success, and chainage was read off a centreline the drive never touched.
+Every defect positioned from that chainage looked plausible and was wrong.
+
+Raising the tolerance would not have helped: it makes more points snap to a road
+they are not on. What was missing was the ratio check that says "this is not a
+match", and the distance distribution that says why.
 """
-Regression test for consolidated map matching functionality.
-
-Covers:
-- Road buffer creation
-- Spatial snapping in WGS84
-- Inertial GPS ingestion
-- Vision detection ingestion
-- Matching summary reporting
-- WGS84 <-> UTM round-trip stability
-- Haversine distance
-- Linear chainage
-- GPX trajectory parsing
-- Point-to-line distance
-- Batch snapping
-- Buffer geometry creation
-"""
-
-from __future__ import annotations
-
+import numpy as np
+import pandas as pd
 import pytest
 
-from app.services.spatial import (
-    MapMatchingIntegration,
-    RoadNetworkBuffer,
-    SpatialService,
-    CoordinateSystem,
-    MapMatchedPoint,
-    RoadSegment,
-    SpatialGeospatialService,
-)
+from app.services.spatial.service import SpatialService
 
 
-def assert_close(actual: float, expected: float, tolerance: float, label: str) -> None:
-    if abs(actual - expected) > tolerance:
-        raise AssertionError(f"{label}: expected {expected}, got {actual}")
-
-
-def build_inertial_shapefile_data() -> dict:
-    return {
-        "segments": [
-            {
-                "id": "SEG_A",
-                "centerline": [(0.0000, 0.0000), (0.0010, 0.0000)],
-                "name": "Primary Road",
-                "width": 8.0,
-            },
-            {
-                "id": "SEG_B",
-                "centerline": [(0.0000, 0.0100), (0.0010, 0.0100)],
-                "name": "Secondary Road",
-                "width": 6.0,
-            },
-        ]
-    }
-
-
-def test_wgs84_round_trip() -> None:
-    lon, lat = 5.6790, -0.1560
-    easting, northing, zone, hemisphere = SpatialService.wgs84_to_utm(lon, lat)
-    restored_lon, restored_lat = SpatialService.utm_to_wgs84(easting, northing, zone, hemisphere)
-
-    assert_close(restored_lon, lon, 0.0002, "Longitude round-trip")
-    assert_close(restored_lat, lat, 0.0002, "Latitude round-trip")
-
-
-def test_road_buffer_snap() -> None:
-    network = RoadNetworkBuffer(road_width_default=7.0, coordinate_system=CoordinateSystem.WGS84)
-    segment = network.add_road_segment(
-        segment_id="ROAD_001",
-        centerline=[(0.0000, 0.0000), (0.0010, 0.0000)],
-        road_name="Test Road",
-        width_meters=8.0,
+def _track(count, lat0=6.30, lon0=-1.65, dlat=0.0, dlon=0.0):
+    """A straight run of GPS points, optionally offset from a point of interest."""
+    return pd.DataFrame(
+        {
+            "lat": [lat0 + dlat + i * 1e-5 for i in range(count)],
+            "lon": [lon0 + dlon + i * 1e-5 for i in range(count)],
+        }
     )
 
-    info = network.get_road_info("ROAD_001")
-    assert info is not None, "Expected road info to exist"
-    assert info["segment_id"] == "ROAD_001"
-    assert info["road_name"] == "Test Road"
-    assert info["buffer_distance_meters"] == 4.0
-    assert "bounds" in info and info["bounds"] is not None
 
-    match = network.snap_point_to_road((0.0005, 0.00001), search_radius_meters=100.0)
-    assert match is not None, "Expected point to match road"
-    assert match.snapped_segment_id == segment.segment_id
-    assert match.is_within_buffer is True
-    assert match.distance_to_road_meters < 5.0
-    assert_close(match.snapped_point[0], 0.0005, 0.0002, "Snapped longitude")
-    assert_close(match.snapped_point[1], 0.0, 0.0002, "Snapped latitude")
+#: A straight east-west centreline just south of the track above.
+CENTERLINE = "LINESTRING (-1.6500 6.2990, -1.6400 6.2990)"
 
 
-def test_map_matching_integration() -> None:
-    integration = MapMatchingIntegration(build_inertial_shapefile_data())
-
-    gps_points = [
-        {"longitude": 0.0004, "latitude": 0.00002},
-        {"lon": 0.0006, "lat": 0.00998},
-        {"longitude": 0.1000, "latitude": 0.1000},
-    ]
-    gps_matches = integration.match_inertial_gps_data(gps_points)
-
-    assert len(gps_matches) == 3
-    assert gps_matches[0] is not None
-    assert gps_matches[0].snapped_segment_id == "SEG_A"
-    assert gps_matches[0].is_within_buffer is True
-    assert gps_matches[1] is not None
-    assert gps_matches[1].snapped_segment_id == "SEG_B"
-    assert gps_matches[1].is_within_buffer is True
-    assert gps_matches[2] is None
-
-    vision_detections = [
-        {"lon": 0.00045, "lat": 0.00001, "defect": "crack"},
-        {"longitude": 0.00055, "latitude": 0.01001, "defect": "rutting"},
-        {"lon": 0.50000, "lat": 0.50000, "defect": "pothole"},
-    ]
-    vision_matches = integration.match_vision_detections(vision_detections)
-
-    assert len(vision_matches) == 3
-    assert vision_matches[0] is not None
-    assert vision_matches[0].snapped_segment_id == "SEG_A"
-    assert vision_matches[1] is not None
-    assert vision_matches[1].snapped_segment_id == "SEG_B"
-    assert vision_matches[2] is None
-
-    summary = integration.get_matching_summary(gps_matches + vision_matches)
-    assert summary["total_points"] == 6
-    assert summary["matched_points"] == 4
-    assert summary["within_buffer"] == 4
-    assert summary["success_rate"] == (4 / 6) * 100
-    assert summary["avg_distance_to_road_meters"] >= 0.0
-    assert summary["max_distance_to_road_meters"] >= summary["min_distance_to_road_meters"]
-
-    buffer_meta = integration.create_road_buffer_polygon("SEG_A")
-    assert buffer_meta is not None
-    assert buffer_meta["segment_id"] == "SEG_A"
-    assert "buffer_geometry" in buffer_meta
-
-
-def test_haversine_distance() -> None:
-    lon1, lat1 = 0.0, 0.0
-    lon2, lat2 = 0.01, 0.0
-    dist = SpatialGeospatialService.haversine_distance(lon1, lat1, lon2, lat2)
-    assert dist > 0.0
-    assert dist < 2000.0
-
-
-def test_compute_linear_chainage() -> None:
-    coords = [{"lon": 0.0, "lat": 0.0}, {"lon": 0.001, "lat": 0.0}, {"lon": 0.001, "lat": 0.001}]
-    chainage = SpatialGeospatialService.compute_linear_chainage(coords)
-    assert len(chainage) == 3
-    assert chainage[0] == pytest.approx(0.0)
-    assert chainage[-1] > chainage[0]
-
-
-def test_point_to_line_distance() -> None:
-    p = (0.0005, 0.0001)
-    a = (0.0, 0.0)
-    b = (0.001, 0.0)
-    dist, t = SpatialGeospatialService.point_to_line_distance(p[0], p[1], a[0], a[1], b[0], b[1])
-    assert dist >= 0.0
-    assert 0.0 <= t <= 1.0
-
-
-def test_road_network_batch_snap() -> None:
-    network = RoadNetworkBuffer(road_width_default=7.0, coordinate_system=CoordinateSystem.WGS84)
-    network.add_road_segment(
-        segment_id="ROAD_BATCH",
-        centerline=[(0.0000, 0.0000), (0.0010, 0.0000)],
-        road_name="Batch Road",
-        width_meters=8.0,
+def _on_the_road(count):
+    """Points hugging the centreline."""
+    return pd.DataFrame(
+        {
+            "lat": [6.29901] * count,
+            "lon": [-1.6500 + i * 1e-5 for i in range(count)],
+        }
     )
-    points = [(0.0005, 0.00001), (0.0005, 0.0100)]
-    results = network.batch_snap_points(points)
-    assert len(results) == 2
-    assert results[0] is not None
-    assert results[0].is_within_buffer is True
-    assert results[1] is None
 
 
-def test_road_network_get_all_segments() -> None:
-    network = RoadNetworkBuffer(road_width_default=7.0, coordinate_system=CoordinateSystem.WGS84)
-    network.add_road_segment(
-        segment_id="SEG_1",
-        centerline=[(0.0, 0.0), (0.001, 0.0)],
-        road_name="Road 1",
-        width_meters=8.0,
-    )
-    network.add_road_segment(
-        segment_id="SEG_2",
-        centerline=[(0.0, 0.01), (0.001, 0.01)],
-        road_name="Road 2",
-        width_meters=6.0,
-    )
-    segments = network.get_all_segments()
-    assert isinstance(segments, dict)
-    assert len(segments) == 2
-    assert set(segments.keys()) == {"SEG_1", "SEG_2"}
-    assert segments["SEG_1"]["road_name"] == "Road 1"
-    assert segments["SEG_2"]["road_name"] == "Road 2"
-
-
-def test_road_segment_validation() -> None:
-    with pytest.raises(ValueError):
-        RoadSegment(
-            segment_id="BAD",
-            centerline_coords=[],
-            road_name="No Centerline",
-            road_width_meters=8.0,
-        )
-    with pytest.raises(ValueError):
-        RoadSegment(
-            segment_id="BAD",
-            centerline_coords=[(0.0, 0.0)],
-            road_name="Zero Width",
-            road_width_meters=0.0,
+class TestMatchStatus:
+    def test_a_run_that_follows_the_road_is_matched(self):
+        result = SpatialService.map_match_trajectory(
+            gps_df=_on_the_road(40), centerline_wkt=CENTERLINE
         )
 
+        assert result["match_status"] == SpatialService.MATCH_OK
+        assert result["match_ratio"] == 1.0
+        assert result["matched_points"] == 40
 
-def test_parse_gpx_trajectory(tmp_path) -> None:
-    gpx_content = """<?xml version="1.0" encoding="UTF-8"?>
-<gpx>
-  <trk>
-    <trkseg>
-      <trkpt lat="1.0" lon="2.0"><time>2024-01-01T00:00:00Z</time></trkpt>
-      <trkpt lat="1.001" lon="2.001"><time>2024-01-01T00:00:01Z</time></trkpt>
-    </trkseg>
-  </trk>
-</gpx>"""
-    gpx_path = tmp_path / "test.gpx"
-    gpx_path.write_text(gpx_content)
-    trajectory = SpatialGeospatialService.parse_gpx_trajectory(str(gpx_path))
-    assert len(trajectory) == 2
-    assert trajectory[0]["lat"] == 1.0
-    assert trajectory[0]["lon"] == 2.0
+    def test_a_sparse_match_is_not_reported_as_a_match(self):
+        """The regression: a handful of stray points near the line used to be
+        enough to claim the whole run matched."""
+        # 8 points on the centreline, 32 well outside the tolerance.
+        near = pd.DataFrame(
+            {
+                "lat": [6.29901] * 8,
+                "lon": [-1.6500 + i * 1e-5 for i in range(8)],
+            }
+        )
+        far = pd.DataFrame(
+            {
+                "lat": [6.30500 + i * 1e-5 for i in range(32)],
+                "lon": [-1.6500 + i * 1e-5 for i in range(32)],
+            }
+        )
+        gps = pd.concat([near, far], ignore_index=True)
+
+        result = SpatialService.map_match_trajectory(
+            gps_df=gps, centerline_wkt=CENTERLINE
+        )
+
+        assert result["match_status"] == SpatialService.MATCH_POOR
+        assert result["match_status"] != "matched"
+        assert result["match_ratio"] < SpatialService.MIN_MATCH_RATIO
+
+    def test_no_match_at_all_is_unmatched(self):
+        result = SpatialService.map_match_trajectory(
+            gps_df=_track(30, dlat=0.01), centerline_wkt=CENTERLINE
+        )
+
+        assert result["match_status"] == SpatialService.MATCH_NONE
+        assert result["matched_points"] == 0
+
+    def test_a_sparse_match_reports_why(self):
+        """The distance distribution is what separates 'wrong road' from 'poor
+        centreline geometry' — different problems with different fixes."""
+        near = pd.DataFrame(
+            {"lat": [6.29901] * 4, "lon": [-1.6500 + i * 1e-5 for i in range(4)]}
+        )
+        far = pd.DataFrame(
+            {"lat": [6.30500] * 20, "lon": [-1.6500 + i * 1e-5 for i in range(20)]}
+        )
+        gps = pd.concat([near, far], ignore_index=True)
+
+        result = SpatialService.map_match_trajectory(
+            gps_df=gps, centerline_wkt=CENTERLINE
+        )
+
+        assert result["median_distance_m"] > SpatialService.POINT_MATCH_TOLERANCE_M
+        # Every point is accounted for, matched or not. The far cluster sits
+        # ~660 m off, which is what says "wrong road" rather than "GPS drift".
+        assert result["max_distance_observed_m"] >= result["median_distance_m"]
+        assert result["max_distance_observed_m"] > 500.0
+        assert result["mean_distance_m"] > 0.0
+
+    def test_snapped_coords_are_still_returned_for_a_poor_match(self):
+        """A poor match must not silently discard the evidence that it was poor."""
+        near = pd.DataFrame(
+            {"lat": [6.29901] * 3, "lon": [-1.6500 + i * 1e-5 for i in range(3)]}
+        )
+        far = pd.DataFrame(
+            {"lat": [6.30500] * 20, "lon": [-1.6500 + i * 1e-5 for i in range(20)]}
+        )
+        gps = pd.concat([near, far], ignore_index=True)
+
+        result = SpatialService.map_match_trajectory(
+            gps_df=gps, centerline_wkt=CENTERLINE
+        )
+
+        assert result["match_status"] == SpatialService.MATCH_POOR
+        assert len(result["snapped_coords"]) == 23
 
 
-def test_map_matching_summary_empty() -> None:
-    integration = MapMatchingIntegration(build_inertial_shapefile_data())
-    summary = integration.get_matching_summary([])
-    assert summary["total_points"] == 0
-    assert summary["matched_points"] == 0
-    assert summary["success_rate"] == 0.0
+class TestThresholdSeparation:
+    def test_road_selection_and_point_matching_are_separate_dials(self):
+        assert SpatialService.ROAD_SELECTION_RADIUS_M >= SpatialService.POINT_MATCH_TOLERANCE_M
+        # They must be independently settable; a shared constant is what made the
+        # two decisions impossible to reason about separately.
+        assert "ROAD_SELECTION_RADIUS_M" in vars(SpatialService)
+        assert "POINT_MATCH_TOLERANCE_M" in vars(SpatialService)
+        assert not hasattr(SpatialService, "DEFAULT_MAX_DISTANCE_M")
 
+    def test_an_explicit_tolerance_still_overrides(self):
+        result = SpatialService.map_match_trajectory(
+            gps_df=_on_the_road(20), centerline_wkt=CENTERLINE, max_distance_m=5.0
+        )
 
-def run_all_tests() -> None:
-    test_wgs84_round_trip()
-    test_road_buffer_snap()
-    test_map_matching_integration()
-    test_haversine_distance()
-    test_compute_linear_chainage()
-    test_point_to_line_distance()
-    test_road_network_batch_snap()
-    test_road_network_get_all_segments()
-    test_road_segment_validation()
-    print("test_map_matching.py: all assertions passed")
+        assert result["max_distance_m"] == 5.0
 
-
-if __name__ == "__main__":
-    run_all_tests()
+    def test_the_ratio_floor_is_configurable_on_the_class(self):
+        assert 0.0 < SpatialService.MIN_MATCH_RATIO <= 1.0

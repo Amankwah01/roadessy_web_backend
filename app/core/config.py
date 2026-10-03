@@ -1,5 +1,6 @@
 # app/core/config.py
 import os
+from typing import Any, Dict
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
@@ -57,8 +58,20 @@ from scipy.interpolate import PchipInterpolator
 # its own end is how a fabricated curve gets mistaken for a digitized one.
 #
 # The IRI side of the ASTM pipeline (QCM per ASTM E1926/E950) is a real
-# measurement from the vibration data and is NOT affected by the curve problem,
-# so it keeps running. Set ASTM_QCM_IRI_ENABLED=false to mute that too.
+# measurement from the vibration data and is NOT affected by the curve problem.
+# It is nevertheless off by default, because the track is published as a unit:
+#
+#   * A reader shown "ASTM QCM IRI" next to no ASTM PCI has been told one half of
+#     a method and not the other, and will reasonably assume the half that is
+#     missing is missing from the data rather than withheld from the build. The
+#     mute reason says otherwise, but a reason beside a number does not stop the
+#     number being quoted on its own.
+#   * The QCM half is not free. It resamples to 100 Hz and runs a quarter-car
+#     simulation, and it is the most expensive step in the inertial path for a
+#     figure no report in this service consumes.
+#
+# Set ASTM_QCM_IRI_ENABLED=true to compute and publish it again. The calculation
+# is retained in full either way.
 def _env_flag(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -66,11 +79,57 @@ def _env_flag(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+#: Where the pipeline writes everything it produces. One root for the whole
+#: deployment, because the artifact routes serve exactly what the pipeline wrote
+#: and a second tree next to it would be a second thing that can drift empty.
+#:
+#: Read through `app.core.env` so a value in `.env` is honoured whichever module
+#: is imported first; `os.getenv` alone only sees the process environment, which
+#: is how a configured output directory ends up silently ignored.
+_DEFAULT_OUTPUT_DIR = r"F:\Adubofour\rodeessy_mphil\RoadSurveyOutputs"
+
+
+def output_base_dir() -> "os.PathLike[str]":
+    from pathlib import Path
+
+    from app.core.env import get_env
+
+    return Path(get_env("ROADESSY_OUTPUT_DIR", _DEFAULT_OUTPUT_DIR))
+
+
 #: Publish the D6433-derived PCI. Default off; see the note above.
 ASTM_PCI_ENABLED = _env_flag("ASTM_PCI_ENABLED", False)
 
-#: Publish the ASTM QCM IRI. Independent of the PCI curve problem, so on.
-ASTM_QCM_IRI_ENABLED = _env_flag("ASTM_QCM_IRI_ENABLED", True)
+#: Publish the ASTM QCM IRI. Off by default too; see the note above. Sound
+#: calculation, but it belongs to a track whose PCI half is withheld, and it is
+#: the most expensive step in the inertial path.
+ASTM_QCM_IRI_ENABLED = _env_flag("ASTM_QCM_IRI_ENABLED", False)
+
+#: Run no part of the ASTM track at all.
+#:
+#: The two sub-switches above decide what the ASTM track *publishes*. This one
+#: decides whether any of it is *computed*, so a deployment that does not want
+#: ASTM pays none of its cost: no QCM IRI resampling, no ASTM interpretation of
+#: the detections, no ASTM segments.
+#:
+#: The video is still decoded either way. Detection is shared — the Roadessy
+#: track reuses the same detections under a different distress mapping — so
+#: switching this off cannot skip `process_video_astm`, and does not try to.
+#:
+#: Default off. With both sub-switches off it is already inert, so this is
+#: stated separately to make the intent readable at the top of the module
+#: rather than something a reader has to derive from two other flags.
+ASTM_TRACK_ENABLED = _env_flag("ASTM_TRACK_ENABLED", False)
+
+#: Whether any ASTM work happens this run.
+ASTM_TRACK_RUNNING = ASTM_TRACK_ENABLED and (ASTM_PCI_ENABLED or ASTM_QCM_IRI_ENABLED)
+
+#: Why the ASTM track is absent, for the API and the reports to repeat.
+ASTM_TRACK_DISABLED_REASON = (
+    "The ASTM track is disabled in this build, so no ASTM PCI or ASTM QCM IRI is "
+    "reported for this run. Condition figures come from the Roadessy track. The "
+    "ASTM calculation code is retained and disabled, not removed."
+)
 
 #: What a consumer should show in place of a PCI. Kept next to the flag so the
 #: API, the reports and the exports all say the same thing.
@@ -81,6 +140,29 @@ ASTM_PCI_DISABLED_REASON = (
     "standard's own worked example. The calculation code is retained and is "
     "disabled, not removed."
 )
+
+
+def astm_track_state() -> Dict[str, Any]:
+    """What this build does with the ASTM track, in one answer.
+
+    Read once per run and logged, so "the pipeline reported no ASTM PCI and no
+    ASTM IRI" is a line in the run's own log rather than something a reader has
+    to infer from the absence of two numbers. The API answers the same question
+    from this same function, so the log and the response cannot disagree about
+    what the build does.
+    """
+    return {
+        "running": ASTM_TRACK_RUNNING,
+        "track_enabled": ASTM_TRACK_ENABLED,
+        "pci_enabled": ASTM_PCI_ENABLED,
+        "qcm_iri_enabled": ASTM_QCM_IRI_ENABLED,
+        "reason": None if ASTM_TRACK_RUNNING else ASTM_TRACK_DISABLED_REASON,
+        # The PCI carries its own, more specific reason, reported alongside rather
+        # than replaced: a reader told the track is off still wants to know that
+        # this half is withheld for a documented data fault, which is a different
+        # situation from the track being switched off deliberately.
+        "pci_reason": None if ASTM_PCI_ENABLED else ASTM_PCI_DISABLED_REASON,
+    }
 
 # Golden Quarter-Car Simulation (QCM) Constants
 C_S = 6.0  # Suspension damping coefficient (1/s)

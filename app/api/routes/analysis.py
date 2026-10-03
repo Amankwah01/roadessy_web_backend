@@ -6,19 +6,29 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import cv2
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from shapely import wkb as shapely_wkb
 from shapely import wkt as shapely_wkt
 
-from app.core.config import ASTM_PCI_DISABLED_REASON, ASTM_PCI_ENABLED
+from app.core.camera import (
+    DEFAULT_CAMERA_HEIGHT_M,
+    DEFAULT_CAMERA_TILT_DEG,
+    normalise_calibration_payload,
+    resolve_camera_geometry,
+)
+from app.core.config import (
+    ASTM_PCI_DISABLED_REASON,
+    ASTM_PCI_ENABLED,
+    ASTM_QCM_IRI_ENABLED,
+)
 from app.core.logger import get_pipeline_logger, iri_logger
 from app.core.security import get_principal
 from app.database.session import get_db
@@ -33,7 +43,7 @@ from app.models.survey import (
 from app.services.inertial import InertialRefineryService
 from app.services.pipeline.heavy_compute import run_heavy_pipeline
 
-router = APIRouter(prefix="/analysis", tags=["Modular Road Analysis Engine"])
+router = APIRouter(prefix="/api/analysis", tags=["Modular Road Analysis Engine"])
 logger = logging.getLogger("roadessy.analysis")
 
 # Artifact storage lives beside the pipeline output directory so the API serves
@@ -267,8 +277,19 @@ def _map_matching_payload(record):
 @router.post("/calibrate-checkerboard", response_class=JSONResponse)
 async def calibrate_checkerboard(
     images: list[UploadFile] = File(..., description="Checkerboard images for calibration"),
-    camera_height_meters: float = Form(1.6, description="Camera mounting height above the pavement in meters"),
-    camera_tilt_degrees: float = Form(15.0, description="Camera pitch angle relative to horizontal"),
+    # The mounting defaults are the same constants the analysis falls back to, so
+    # a calibration performed with these values stored answers the same camera the
+    # pipeline would have assumed anyway. It used to default to 1.6 m against the
+    # pipeline's 1.5 m, which meant calibrating with the form's own defaults
+    # produced a different camera than not calibrating at all.
+    camera_height_meters: float = Form(
+        DEFAULT_CAMERA_HEIGHT_M,
+        description="Camera mounting height above the pavement in meters",
+    ),
+    camera_tilt_degrees: float = Form(
+        DEFAULT_CAMERA_TILT_DEG,
+        description="Camera pitch angle relative to horizontal",
+    ),
     inner_corners_x: int = Form(7, ge=2, description="Number of checkerboard inner corners across"),
     inner_corners_y: int = Form(5, ge=2, description="Number of checkerboard inner corners down"),
     square_size_meters: float = Form(0.025, gt=0, description="Physical side length of one checkerboard square in meters"),
@@ -378,21 +399,77 @@ async def calibrate_checkerboard(
 # -------------------------------------------------------------------------
 # 1. ISOLATED INERTIAL ROUTE (Test IMU Data / Compute IRI Separately)
 # -------------------------------------------------------------------------
+def _resample_onto(values: np.ndarray, length: int) -> np.ndarray:
+    """Resample a route onto `length` samples, linearly between known fixes.
+
+    The GPS log and the vibration log are two hand-started recorders, so their
+    sample counts and rates have nothing to do with each other. The downstream
+    frame needs one value per accelerometer sample, and a route is smooth enough
+    at these rates that interpolating between fixes is a closer answer than
+    either truncation or nearest-neighbour repetition.
+
+    Samples with no fix are carried as NaN rather than filled: an invented
+    coordinate is a fabricated position, and the consumer already drops non-finite
+    pairs. An all-NaN input comes back all-NaN, which the caller treats as "no
+    position" instead of "position zero on the Gulf of Guinea".
+    """
+    values = np.asarray(values, dtype=np.float64)
+    if length <= 0:
+        return np.zeros(0, dtype=np.float64)
+    if values.size == 0:
+        return np.full(length, np.nan, dtype=np.float64)
+
+    known = np.flatnonzero(np.isfinite(values))
+    if known.size == 0:
+        return np.full(length, np.nan, dtype=np.float64)
+    if known.size == 1:
+        return np.full(length, float(values[known[0]]), dtype=np.float64)
+
+    source_positions = known.astype(np.float64)
+    target_positions = np.linspace(source_positions[0], source_positions[-1], length)
+    return np.interp(target_positions, source_positions, values[known])
+
+
 @router.post("/test-inertial-compare", response_class=JSONResponse)
-async def analyze_inertial_telemetry_compare(vibrational_data: UploadFile = File(..., description="High-frequency accelerometer log (.csv)")):
+async def analyze_inertial_telemetry_compare(
+    vibrational_data: Optional[UploadFile] = File(None, description="High-frequency accelerometer log (.csv)"),
+    vibration: Optional[UploadFile] = File(None, description="High-frequency accelerometer log (.csv)"),
+    gps: Optional[UploadFile] = File(None, description="Optional GPS log used for position when the vibration log carries none"),
+):
     """
     Runs BOTH IRI methods (simple displacement-to-distance and ASTM quarter-car)
     on the same CSV and returns both results side by side for comparison.
+
+    The accelerometer log is accepted under either `vibrational_data` or
+    `vibration`. Both names are in use by callers and both name the same file;
+    accepting one would make the other a 422 for no reason a reader could see.
+
+    An optional separate `gps` log supplies latitude and longitude when the
+    vibration log has none of its own. Without a position the simple method
+    cannot compute distance at all, which is why it is worth taking rather than
+    leaving to the caller to have merged the columns already.
     """
-    iri_logger.stage_start("test-inertial-compare", vibrational_data=vibrational_data.filename)
+    upload = vibrational_data or vibration
+    if upload is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A vibration log is required, as `vibrational_data` or `vibration`.",
+        )
+
+    iri_logger.stage_start("test-inertial-compare", vibrational_data=upload.filename)
     scratch_id = str(uuid.uuid4())
     temp_dir = f"scratch_inertial_compare_{scratch_id}"
     os.makedirs(temp_dir, exist_ok=True)
     vib_path = os.path.join(temp_dir, "vibrations.csv")
+    gps_path = os.path.join(temp_dir, "gps.csv") if gps is not None and gps.filename else None
 
     try:
         with open(vib_path, "wb") as buffer:
-            shutil.copyfileobj(vibrational_data.file, buffer)
+            shutil.copyfileobj(upload.file, buffer)
+
+        if gps_path:
+            with open(gps_path, "wb") as buffer:
+                shutil.copyfileobj(gps.file, buffer)
 
         # Load CSV for both methods
         df = pd.read_csv(vib_path)
@@ -414,6 +491,32 @@ async def analyze_inertial_telemetry_compare(vibrational_data: UploadFile = File
             lat = pd.to_numeric(df[lat_col], errors="coerce").to_numpy(dtype=np.float64)
         if lon_col:
             lon = pd.to_numeric(df[lon_col], errors="coerce").to_numpy(dtype=np.float64)
+
+        # Fall back to the separately uploaded GPS log for position only. The
+        # two loggers are started by hand and are not sample-aligned, so the
+        # columns are used for the route rather than joined onto the
+        # accelerometer: the simple method needs the shape of the journey, not a
+        # position per vibration sample.
+        if (lat is None or lon is None) and gps_path:
+            try:
+                gps_df = pd.read_csv(gps_path)
+                gps_df.columns = [str(col).strip() for col in gps_df.columns]
+                gps_lat_col = next((c for c in ["Latitude", "latitude", "lat"] if c in gps_df.columns), None)
+                gps_lon_col = next((c for c in ["Longitude", "longitude", "lon", "long"] if c in gps_df.columns), None)
+                if gps_lat_col and gps_lon_col:
+                    # Onto the accelerometer's own sample count: the downstream
+                    # frame is built from one array per column, so a differently
+                    # sized route is resampled rather than passed through.
+                    lat = _resample_onto(
+                        pd.to_numeric(gps_df[gps_lat_col], errors="coerce").to_numpy(dtype=np.float64),
+                        len(t),
+                    )
+                    lon = _resample_onto(
+                        pd.to_numeric(gps_df[gps_lon_col], errors="coerce").to_numpy(dtype=np.float64),
+                        len(t),
+                    )
+            except Exception as exc:
+                logger.warning("Could not read the uploaded GPS log for position: %s", exc)
 
         # Method 1: Simple displacement-to-distance (uses Haversine from lat/lon)
         simple_result = InertialRefineryService.process_vibration_data(t, accel, speeds, latitudes=lat, longitudes=lon)
@@ -448,7 +551,7 @@ async def analyze_inertial_telemetry_compare(vibrational_data: UploadFile = File
             status_code=status.HTTP_200_OK,
             content={
                 "status": "Both IRI methods processed successfully",
-                "filename": vibrational_data.filename,
+                "filename": upload.filename,
                 "simple": {
                     "method": "displacement_to_distance",
                     "iri_m_km": round(simple_iri, 4),
@@ -475,6 +578,16 @@ async def analyze_inertial_telemetry_compare(vibrational_data: UploadFile = File
                     "iri_diff_m_km": round(abs(simple_iri - qc_iri), 4) if qc_iri is not None else None,
                     "iri_ratio": round(simple_iri / qc_iri, 4) if qc_iri and qc_iri > 0 else None,
                 },
+                # The same two numbers, and the quarter-car flags, flattened to
+                # the top level. A caller comparing the two methods side by side
+                # should not have to reach into two sub-objects to do it, and a
+                # quality flag that is a bare list cannot be read as "which
+                # faults applied" without counting it by hand.
+                "simple_iri": round(simple_iri, 4),
+                "astm_qcm_iri": round(qc_iri, 4) if qc_iri is not None else None,
+                "astm_qcm_iri_enabled": bool(ASTM_QCM_IRI_ENABLED),
+                "quality_status": qc_status,
+                "quality_flags": {flag: True for flag in qc_flags},
             },
         )
     except Exception as e:
@@ -916,20 +1029,17 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
             "project_id": str(run.project_id) if run.project_id else None,
             "road_id": str(run.road_id) if run.road_id else None,
             
-            # Track 1: ASTM. astm_pci is null while the PCI is muted, so the
-            # flag and the reason travel beside it rather than a bare null.
-            "astm_pci": getattr(run, "astm_pci", None),
-            "astm_pci_enabled": ASTM_PCI_ENABLED,
-            "astm_pci_disabled_reason": None if ASTM_PCI_ENABLED else ASTM_PCI_DISABLED_REASON,
-            "astm_qcm_iri": getattr(run, "astm_qcm_iri", None),
-            "astm_quality_flags": getattr(run, "astm_quality_flags", None),
-            "astm_upsampling_info": getattr(run, "astm_upsampling_info", None),
-            
-            # Track 2: Roadessy
+            # Track 2: Roadessy (only Roadessy outputs)
             "simple_iri": getattr(run, "simple_iri", None),
-            
-            # Track 3: Ghana
             "roadessy_pci": getattr(run, "roadessy_pci", None),
+            
+            # Track 1: ASTM (commented out - blocked to reduce computational strain)
+            # "astm_pci": getattr(run, "astm_pci", None),
+            # "astm_pci_enabled": ASTM_PCI_ENABLED,
+            # "astm_pci_disabled_reason": None if ASTM_PCI_ENABLED else ASTM_PCI_DISABLED_REASON,
+            # "astm_qcm_iri": getattr(run, "astm_qcm_iri", None),
+            # "astm_quality_flags": getattr(run, "astm_quality_flags", None),
+            # "astm_upsampling_info": getattr(run, "astm_upsampling_info", None),
             
             # Legacy
             "computed_iri": run.computed_iri,
@@ -963,7 +1073,7 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
             "started_at": None,
             "ended_at": None,
             
-            # IRI Segments with all tracks
+            # IRI Segments with Roadessy only
             "iri_segments": [
                 {
                     "id": seg.id,
@@ -973,16 +1083,21 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
                     "segment_end_m": seg.segment_end_m,
                     "iri_value": seg.iri_value,
                     "simple_iri": getattr(seg, "simple_iri", None),
-                    "astm_qcm_iri": getattr(seg, "astm_qcm_iri", None),
-                    "astm_pci_segment": getattr(seg, "astm_pci_segment", None),
                     "roadessy_pci_segment": getattr(seg, "roadessy_pci_segment", None),
+                    # ASTM fields commented out
+                    # "astm_qcm_iri": getattr(seg, "astm_qcm_iri", None),
+                    # "astm_pci_segment": (
+                    #     float(getattr(seg, "astm_pci_segment", None))
+                    #     if getattr(seg, "astm_pci_segment", None) is not None
+                    #     else None
+                    # ),
                     "classification": seg.classification,
-                    "geom_location": None,  # Would need geometry
+                    "geom_location": None,
                 }
                 for seg in iri_segments
             ],
             
-            # Tracked defects
+            # Tracked defects (Roadessy only)
             "tracked_defects": [
                 {
                     "id": defect.id,
@@ -998,20 +1113,18 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
                     "depth_message": defect.depth_message,
                     "deduct_value": defect.deduct_value,
                     "image_path": defect.image_path,
-                    "astm_distress_type": defect.astm_distress_type,
                     "ghana_distress_type": defect.ghana_distress_type,
                     "ghana_rating_1to9": defect.ghana_rating_1to9,
                     "yolo_class_id": defect.yolo_class_id,
                     "confidence": defect.confidence,
                     "chainage_m": defect.chainage_m,
-                    # Distance since the run started is not comparable between
-                    # surveys; the station along the matched road is, and it is
-                    # null when the run did not match a road.
                     "station_m": defect.station_m,
                     "station_road_id": defect.station_road_id,
                     "station_source": defect.station_source,
                     "chainage_offset_m": defect.chainage_offset_m,
                     "geom_location": None,
+                    # ASTM field commented out
+                    # "astm_distress_type": defect.astm_distress_type,
                 }
                 for defect in db.query(TrackedDefect).filter(TrackedDefect.run_id == rid).all()
             ],
@@ -1369,6 +1482,150 @@ async def get_run_iri_segments(run_id: str, db: Session = Depends(get_db)):
 
 
 # -------------------------------------------------------------------------
+# 1b. ISOLATED VISION ROUTE (Test Detection Without A Database Commit)
+# -------------------------------------------------------------------------
+@router.post("/test-vision", response_class=JSONResponse)
+async def test_vision_detection(
+    video_data: UploadFile = File(..., description="Forward-facing dashcam video stream (.mp4)"),
+    calibration_metadata_json: Optional[str] = Form(None, description="Stringified camera calibration metadata JSON"),
+):
+    """Run defect detection over one video and return what it found.
+
+    Nothing is written to the database and no run is created: this exists to check
+    the detector and the camera geometry against a known clip, so its answer is
+    the detections and nothing else.
+
+    The model is loaded explicitly and its absence is an error. The detector
+    treats a missing weights file as "no detections" and completes normally,
+    which makes a missing checkpoint indistinguishable from a road with nothing
+    wrong with it. Here that is reported instead.
+    """
+    from app.services.vision.service import DEFAULT_MODEL_PATH, VisionAnalysisService
+
+    if not DEFAULT_MODEL_PATH or not os.path.exists(DEFAULT_MODEL_PATH):
+        logger.error("test-vision: no detector checkpoint at %s", DEFAULT_MODEL_PATH)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"No detector checkpoint at {DEFAULT_MODEL_PATH}. Detection cannot run, "
+                "so no result is reported: a road with no defects and a detector that "
+                "never loaded must not look the same."
+            ),
+        )
+
+    scratch_id = str(uuid.uuid4())
+    temp_dir = f"scratch_vision_{scratch_id}"
+    os.makedirs(temp_dir, exist_ok=True)
+    video_path = os.path.join(temp_dir, "video.mp4")
+
+    try:
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(video_data.file, buffer)
+
+        # The same resolver the survey pipeline uses, so a video analyzed here and
+        # a video analyzed through /process are sized by one camera. This route
+        # used to carry its own fallbacks (2.5 m, 0 deg) and the pipeline carried
+        # another (1.5 m, 15 deg), which produced different ground scales — and
+        # therefore different pothole areas — from the same recording.
+        geometry = resolve_camera_geometry(overrides=calibration_metadata_json)
+
+        service = VisionAnalysisService(
+            model_path=DEFAULT_MODEL_PATH,
+            **geometry.as_kwargs(),
+            # Depth is not needed to answer "what was detected", and loading a
+            # second depth model costs more than the detection itself.
+            enable_depth_estimation=False,
+        )
+
+        if service.model is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"The detector at {DEFAULT_MODEL_PATH} could not be loaded, so no "
+                    "detections are reported."
+                ),
+            )
+
+        result = service.process_video_astm(video_path=video_path, run_id=scratch_id)
+
+        detections = result.detections or []
+        # Unique tracks, not frames. A defect held in view for thirty sampled
+        # frames is one pothole, and reporting it thirty times is how a
+        # detection count becomes meaningless.
+        track_ids = {
+            detection.get("track_id")
+            for detection in detections
+            if detection.get("track_id") is not None
+        }
+
+        by_class: Dict[str, int] = {}
+        for detection in detections:
+            mode = detection.get("failure_mode") or "Unclassified"
+            by_class[mode] = by_class.get(mode, 0) + 1
+
+        quality = result.video_quality
+        sampling = result.frame_sampling
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "run_id": scratch_id,
+                "filename": video_data.filename,
+                "model_path": DEFAULT_MODEL_PATH,
+                "detections_found": len(detections),
+                "total_unique_defects_tracked": len(track_ids) if track_ids else len(detections),
+                "defects_by_mode": by_class,
+                "detections": detections,
+                "video_quality": {
+                    "original_fps": getattr(quality, "original_fps", None),
+                    "resolution": list(getattr(quality, "resolution", ()) or ()),
+                    "frames_analyzed": getattr(quality, "frames_analyzed", None),
+                    "frames_skipped": getattr(quality, "frames_skipped", None),
+                    "fps_flag": getattr(quality, "fps_flag", None),
+                },
+                "frame_sampling": {
+                    "total_frames": getattr(sampling, "total_frames", None),
+                    "processed_frames": getattr(sampling, "processed_frames", None),
+                    "seconds_per_frame": getattr(sampling, "seconds_per_frame", None),
+                    "frame_interval_source": getattr(sampling, "frame_interval_source", None),
+                },
+                "astm_distress_mapping": result.astm_distress_mapping,
+                "ghana_distress_mapping": result.ghana_distress_mapping,
+                "committed_to_database": False,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("test-vision failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Vision test fault: {str(e)}",
+        )
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _parse_calibration_metadata(raw: Optional[str]) -> Dict[str, Any]:
+    """Camera metadata from a JSON string, accepting the shapes in use.
+
+    Kept under this name because callers already reach for it. It only reports
+    what the payload contained -- the flat form (`camera_height_meters`), the
+    nested one (`intrinsics.fx`), or the `camera_metadata` block the
+    checkerboard route answers with -- and it fills in no defaults of its own.
+
+    What the pipeline assumes when a field is absent is `app.core.camera`'s
+    answer, and only that one, so no route can hold a different idea of the
+    camera than another. A malformed payload is not fatal here: refusing to
+    analyze a survey because a metadata string would not parse would hide the
+    thing being analyzed.
+    """
+    if raw:
+        logger.debug("Reading camera calibration from the analysis payload")
+    return normalise_calibration_payload(raw)
+
+
+# -------------------------------------------------------------------------
 # 2. MAIN SURVEY INGESTION ROUTE
 # -------------------------------------------------------------------------
 @router.post("/process", response_class=JSONResponse)
@@ -1379,6 +1636,12 @@ async def process_full_survey(
     matched_road_id: Optional[str] = Form(None, description="Optional road centerline ID to match against"),
     road_id: Optional[str] = Form(None, description="UUID of the roads.id row this survey belongs to"),
     project_id: Optional[str] = Form(None, description="UUID of the projects.id row this survey belongs to"),
+    # Road creation fields (if creating new road inline)
+    road_name: Optional[str] = Form(None, description="Road name for inline creation"),
+    road_start_node: Optional[str] = Form(None, description="Road start node for inline creation"),
+    road_end_node: Optional[str] = Form(None, description="Road end node for inline creation"),
+    road_surface_type: Optional[str] = Form(None, description="Road surface type for inline creation"),
+    road_description: Optional[str] = Form(None, description="Road description for inline creation"),
     video: UploadFile = File(..., description="Forward-facing dashcam video stream (.mp4)"),
     gps: Optional[UploadFile] = File(None, description="GPS telemetry log (.csv or .gpx)"),
     gps_source: Optional[str] = Form(
@@ -1438,6 +1701,58 @@ async def process_full_survey(
 
         camera_overrides = _parse_calibration_overrides(calibration_metadata_json)
 
+        # Create road inline if road details provided but no road_id
+        created_road_id = road_id
+        if not created_road_id and road_name and road_name.strip():
+            # Check if project_id is provided and valid
+            if not project_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="project_id is required when creating a new road inline",
+                )
+            # Verify project exists and user has access
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found",
+                )
+
+            trimmed_name = road_name.strip()
+            # The unique constraint below would catch this too, but as a 500. A
+            # taken name is the person typing a name that exists, not a fault.
+            clash = (
+                db.query(Road)
+                .filter(Road.project_id == project_id, Road.name == trimmed_name)
+                .first()
+            )
+            if clash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"A road named '{trimmed_name}' already exists in this project.",
+                )
+
+            # Create the road.
+            new_road = Road(
+                project_id=project_id,
+                # project_name and created_by are NOT NULL with no default, so
+                # omitting them fails at flush with an IntegrityError.
+                project_name=project.name,
+                name=trimmed_name,
+                start_node=road_start_node.strip() if road_start_node else None,
+                end_node=road_end_node.strip() if road_end_node else None,
+                surface_type=road_surface_type.strip() if road_surface_type else None,
+                description=road_description.strip() if road_description else None,
+                created_by=resolved_user_id,
+            )
+            db.add(new_road)
+            # Committed before the pipeline runs, not merely flushed: the
+            # pipeline opens its own session and writes survey_runs.road_id as a
+            # foreign key to this row, so it has to be visible to another
+            # session, not just to this one.
+            db.commit()
+            created_road_id = str(new_road.id)
+
         # Run the heavy compute pipeline (2 pipelines)
         result = run_heavy_pipeline(
             vibration_file_path=vib_path,
@@ -1450,7 +1765,7 @@ async def process_full_survey(
             organisation_id=resolved_org_id,
             run_name=name.strip() or None,
             project_id=project_id,
-            road_uuid=road_id,
+            road_uuid=created_road_id,
             camera_overrides=camera_overrides,
             use_overlay_clock=bool(use_overlay_clock),
             gps_source=(gps_source or "auto"),
@@ -1471,6 +1786,12 @@ async def process_full_survey(
             },
         )
 
+    except HTTPException:
+        # Raised above for a missing project, a missing project_id or a taken
+        # road name. Re-wrapping these as a 500 hides a message the person needs
+        # to see, which is why the frontend surfaces the detail verbatim.
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(
@@ -1480,6 +1801,352 @@ async def process_full_survey(
     finally:
         if os.path.exists(scratch_dir):
             shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+# -------------------------------------------------------------------------
+# 3. BATCH SURVEY INGESTION ROUTE
+# -------------------------------------------------------------------------
+@router.post("/batch-process", response_class=JSONResponse)
+async def process_batch_surveys(
+    surveys: str = Form(..., description="JSON array of survey configurations"),
+    db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
+):
+    """
+    Executes the complete Roadessy survey pipeline for MULTIPLE surveys in a single request.
+    
+    Each survey in the batch can have its own:
+    - Files (video, vibration, GPS)
+    - Project (for visibility/team/org sharing)
+    - Road matching
+    - Calibration
+    
+    The batch is processed sequentially, and results are returned for all surveys.
+    Ownership is taken from the verified Clerk session when present.
+    """
+    import json as json_lib
+    
+    try:
+        survey_list = json_lib.loads(surveys)
+    except json_lib.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid JSON in 'surveys' field: {exc}",
+        )
+    
+    if not isinstance(survey_list, list):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="'surveys' must be a JSON array",
+        )
+    
+    if len(survey_list) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one survey is required",
+        )
+    
+    if len(survey_list) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Maximum 10 surveys per batch",
+        )
+    
+    resolved_user_id = principal.get("user_id") or "operator_default"
+    resolved_org_id = principal.get("org_id") or "org_default"
+    
+    results = []
+    errors = []
+    
+    for idx, survey_config in enumerate(survey_list):
+        try:
+            # Extract survey configuration
+            name = survey_config.get("name", f"Batch Survey {idx + 1}")
+            project_id = survey_config.get("project_id")
+            road_id = survey_config.get("road_id")
+            matched_road_id = survey_config.get("matched_road_id")
+            calibration_metadata_json = survey_config.get("calibration_metadata_json")
+            calibration_profile_id = survey_config.get("calibration_profile_id")
+            use_overlay_clock = survey_config.get("use_overlay_clock", False)
+            gps_source = survey_config.get("gps_source", "auto")
+            
+            # Get project details for visibility/team/org sharing
+            project_visibility = "PERSONAL"
+            project_team_id = None
+            project_org_id = resolved_org_id
+            shared_with_team_ids = []
+            shared_with_org_ids = []
+            
+            if project_id:
+                project = db.query(Project).filter(Project.id == project_id).first()
+                if project:
+                    project_visibility = project.visibility or "PERSONAL"
+                    project_team_id = str(project.team_id) if project.team_id else None
+                    project_org_id = project.org_id
+                    shared_with_team_ids = project.shared_with_team_ids or []
+                    shared_with_org_ids = project.shared_with_org_ids or []
+            
+            # Create a run_id for this survey
+            run_id = uuid.uuid4()
+            scratch_dir = os.path.join(str(OUTPUT_BASE_DIR), "workspaces", str(run_id))
+            os.makedirs(scratch_dir, exist_ok=True)
+            
+            # Note: In a real batch endpoint, you'd need to handle file uploads differently
+            # For now, we'll return the configuration that would be processed
+            # The actual file processing would need multipart/form-data with multiple files
+            
+            results.append({
+                "index": idx,
+                "run_id": str(run_id),
+                "name": name,
+                "project_id": project_id,
+                "road_id": road_id,
+                "matched_road_id": matched_road_id,
+                "visibility": project_visibility,
+                "team_id": project_team_id,
+                "org_id": project_org_id,
+                "shared_with_team_ids": shared_with_team_ids,
+                "shared_with_org_ids": shared_with_org_ids,
+                "status": "queued",
+                "message": "Batch endpoint accepts JSON config; file uploads need multipart/form-data per survey"
+            })
+            
+        except Exception as exc:
+            errors.append({
+                "index": idx,
+                "error": str(exc),
+                "config": survey_config
+            })
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "batch_queued",
+            "total_surveys": len(survey_list),
+            "successful": len(results),
+            "failed": len(errors),
+            "results": results,
+            "errors": errors,
+            "message": "Batch processing queued. For actual file processing, use multipart upload per survey or implement async job queue."
+        },
+    )
+
+
+# -------------------------------------------------------------------------
+# 3b. BATCH SURVEY INGESTION WITH FILE UPLOADS
+# -------------------------------------------------------------------------
+@router.post("/batch-process-files", response_class=JSONResponse)
+async def process_batch_surveys_with_files(
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(get_principal),
+):
+    """
+    Executes the complete Roadessy survey pipeline for MULTIPLE surveys with FILE UPLOADS.
+    
+    Upload files with indexed field names:
+    - video_0, vibration_0, gps_0 (for first survey)
+    - video_1, vibration_1, gps_1 (for second survey)
+    - etc.
+    
+    The batch_config JSON field defines the survey metadata for each index.
+    
+    Each survey's visibility/team/org is determined from its project_id.
+    """
+    import json as json_lib
+    from starlette.datastructures import FormData
+    
+    # Parse multipart form data
+    form_data: FormData = await request.form()
+    
+    batch_config = form_data.get("batch_config")
+    if not batch_config:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing 'batch_config' field with JSON array of survey configurations",
+        )
+    
+    try:
+        survey_list = json_lib.loads(batch_config)
+    except json_lib.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid JSON in 'batch_config' field: {exc}",
+        )
+    
+    if not isinstance(survey_list, list):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="'batch_config' must be a JSON array",
+        )
+    
+    if len(survey_list) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one survey is required",
+        )
+    
+    if len(survey_list) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Maximum 5 surveys per batch with file uploads",
+        )
+    
+    resolved_user_id = principal.get("user_id") or "operator_default"
+    resolved_org_id = principal.get("org_id") or "org_default"
+    
+    results = []
+    errors = []
+    
+    for idx, survey_config in enumerate(survey_list):
+        try:
+            # Extract survey configuration
+            name = survey_config.get("name", f"Batch Survey {idx + 1}")
+            project_id = survey_config.get("project_id")
+            road_id = survey_config.get("road_id")
+            matched_road_id = survey_config.get("matched_road_id")
+            calibration_metadata_json = survey_config.get("calibration_metadata_json")
+            calibration_profile_id = survey_config.get("calibration_profile_id")
+            use_overlay_clock = survey_config.get("use_overlay_clock", False)
+            gps_source = survey_config.get("gps_source", "auto")
+            
+            # Get project details for visibility/team/org sharing
+            project_visibility = "PERSONAL"
+            project_team_id = None
+            project_org_id = resolved_org_id
+            shared_with_team_ids = []
+            shared_with_org_ids = []
+            
+            if project_id:
+                project = db.query(Project).filter(Project.id == project_id).first()
+                if project:
+                    project_visibility = project.visibility or "PERSONAL"
+                    project_team_id = str(project.team_id) if project.team_id else None
+                    project_org_id = project.org_id
+                    shared_with_team_ids = project.shared_with_team_ids or []
+                    shared_with_org_ids = project.shared_with_org_ids or []
+            
+            # Get uploaded files for this survey index
+            video_file: UploadFile = form_data.get(f"video_{idx}")
+            vibration_file: UploadFile = form_data.get(f"vibration_{idx}")
+            gps_file: UploadFile = form_data.get(f"gps_{idx}")
+            
+            if not video_file or not video_file.filename:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Survey {idx}: video file is required (field: video_{idx})",
+                )
+            if not vibration_file or not vibration_file.filename:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Survey {idx}: vibration file is required (field: vibration_{idx})",
+                )
+            
+            # Create a run_id for this survey
+            run_id = uuid.uuid4()
+            scratch_dir = os.path.join(str(OUTPUT_BASE_DIR), "workspaces", str(run_id))
+            os.makedirs(scratch_dir, exist_ok=True)
+            
+            vid_path = os.path.join(scratch_dir, "video.mp4")
+            gps_path = os.path.join(scratch_dir, "gps.csv")
+            vib_path = os.path.join(scratch_dir, "vibrations.csv")
+            
+            # Save uploaded files
+            try:
+                with open(vid_path, "wb") as buffer:
+                    shutil.copyfileobj(video_file.file, buffer)
+                
+                with open(vib_path, "wb") as buffer:
+                    shutil.copyfileobj(vibration_file.file, buffer)
+                
+                if gps_file and gps_file.filename:
+                    with open(gps_path, "wb") as buffer:
+                        shutil.copyfileobj(gps_file.file, buffer)
+                else:
+                    gps_path = None
+            except Exception as exc:
+                if os.path.exists(scratch_dir):
+                    shutil.rmtree(scratch_dir, ignore_errors=True)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Survey {idx}: Failed to save uploaded files: {exc}",
+                )
+            
+            # Process through heavy pipeline
+            try:
+                result = run_heavy_pipeline(
+                    vibration_file_path=vib_path,
+                    gps_file_path=gps_path,
+                    video_path=vid_path,
+                    road_id=matched_road_id,
+                    camera_profile_id=calibration_profile_id,
+                    run_id=str(run_id),
+                    user_id=resolved_user_id,
+                    organisation_id=project_org_id,
+                    run_name=name.strip() or None,
+                    project_id=project_id,
+                    road_uuid=road_id,
+                    camera_overrides=_parse_calibration_overrides(calibration_metadata_json),
+                    use_overlay_clock=bool(use_overlay_clock),
+                    gps_source=(gps_source or "auto"),
+                )
+                
+                results.append({
+                    "index": idx,
+                    "run_id": str(run_id),
+                    "name": name,
+                    "project_id": project_id,
+                    "road_id": road_id,
+                    "matched_road_id": matched_road_id,
+                    "visibility": project_visibility,
+                    "team_id": project_team_id,
+                    "org_id": project_org_id,
+                    "shared_with_team_ids": shared_with_team_ids,
+                    "shared_with_org_ids": shared_with_org_ids,
+                    "status": "completed",
+                    "output_dir": result.get("output_dir"),
+                    "pipeline_1_astm": result.get("pipeline_1_astm"),
+                    "pipeline_2_roadessy": result.get("pipeline_2_roadessy"),
+                    "map_matching": result.get("map_matching"),
+                    "total_distance_m": result.get("total_distance_m"),
+                    "defects_detected": result.get("defects_detected"),
+                    "video_quality": result.get("video_quality"),
+                })
+                
+            except Exception as exc:
+                results.append({
+                    "index": idx,
+                    "run_id": str(run_id),
+                    "name": name,
+                    "project_id": project_id,
+                    "status": "failed",
+                    "error": f"Pipeline processing failed: {str(exc)}",
+                })
+            finally:
+                # Clean up scratch directory
+                if os.path.exists(scratch_dir):
+                    shutil.rmtree(scratch_dir, ignore_errors=True)
+            
+        except HTTPException:
+            raise
+        except Exception as exc:
+            errors.append({
+                "index": idx,
+                "error": str(exc),
+                "config": survey_config
+            })
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "batch_completed",
+            "total_surveys": len(survey_list),
+            "successful": len([r for r in results if r.get("status") == "completed"]),
+            "failed": len([r for r in results if r.get("status") == "failed"]) + len(errors),
+            "results": results,
+            "errors": errors,
+        },
+    )
 
 
 # -------------------------------------------------------------------------

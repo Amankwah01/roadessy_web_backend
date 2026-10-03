@@ -6,8 +6,37 @@ import cv2
 import numpy as np
 import pytest
 
-# Old vision_service classes no longer exist in new structure - skip these tests
-pytest.skip("Old vision_service classes removed in reorganization", allow_module_level=True)
+# Every class this file imports was deleted in ec67283 ("refactor backend
+# architecture and modularize services"), which replaced the flat
+# `app/services/vision_service.py` module with the `app/services/vision/`
+# package. The imports below no longer resolve, so the file could not be
+# re-enabled by fixing a path.
+#
+# Nothing is lost by leaving it skipped. Where these tests' subjects survive,
+# they are covered by files written against the current structure:
+#
+#   GroundPlaneHomographyEngine / Extent
+#       -> app/services/vision/ground_plane.py
+#          (GroundExtent, PavementHomography, homography_from_payload)
+#          covered by tests/unit/test_vision_ground_plane.py
+#   Severity / PavedDefectClassifier
+#       -> app/services/astm/ severity ratings and PCI classification
+#          covered by tests/unit/test_astm_severity_ratings.py,
+#          tests/unit/test_pci_sections.py
+#   DefectRatingMatrix
+#       -> no equivalent; the deduct-value logic moved to
+#          app/services/astm/pci.py, covered by test_astm_curves.py
+#   VisionTrackingService
+#       -> app/services/vision/service.py (VisionAnalysisService,
+#          FrameGapDetector) covered by test_vision_tracking.py,
+#          test_vision_model_contract.py, test_vision_and_depth_wiring.py
+#
+# Delete this file once you are satisfied the replacements hold. If a class is
+# ever reintroduced, port the assertion rather than restoring the module.
+pytest.skip(
+    "Subjects deleted in ec67283; coverage moved to the files listed above.",
+    allow_module_level=True,
+)
 
 from app.schemas.payloads import CameraCalibrationMetadata, CameraIntrinsics
 from app.services.vision_service import (

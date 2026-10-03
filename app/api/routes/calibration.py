@@ -13,7 +13,7 @@ from app.schemas.calibration import (
     CalibrationProfileSaveRequest,
 )
 
-router = APIRouter(prefix="/calibration", tags=["calibration"])
+router = APIRouter(prefix="/api/calibration", tags=["calibration"])
 
 
 def _effective_user_id(principal: dict, submitted_user_id: str) -> str:
@@ -163,6 +163,8 @@ def list_calibration_devices(
             )
 
         return {"status": "success", "profiles": results}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

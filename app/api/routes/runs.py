@@ -17,6 +17,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -178,7 +179,7 @@ def _pothole_feature_collection(db: Session, run_uuid, run_title: str) -> Dict[s
                     "timestamp": row.created_at.isoformat() if row.created_at else None,
                     "confidence": 1.0,
                     "image_url": (
-                        f"/analysis/runs/{run_uuid}/defects/{row.track_id}/image"
+                        f"/api/analysis/runs/{run_uuid}/defects/{row.track_id}/image"
                         if row.image_path and row.track_id is not None
                         else None
                     ),
@@ -186,6 +187,302 @@ def _pothole_feature_collection(db: Session, run_uuid, run_title: str) -> Dict[s
             }
         )
     return {"type": "FeatureCollection", "features": features}
+
+
+def _geometry_point(geom) -> Optional[Dict[str, Any]]:
+    """A stored geometry as a GeoJSON Point, or None.
+
+    Read through both shapes the column can hold: a PostGIS geometry (whose
+    `.data` is WKB) and, where there is no PostGIS, the WKT text stored in its
+    place. A defect whose position cannot be read is reported without one rather
+    than dropped, because the measurement is still worth seeing.
+    """
+    if geom is None:
+        return None
+    try:
+        from shapely import wkb as shapely_wkb
+        from shapely import wkt as shapely_wkt
+
+        shape = None
+        if hasattr(geom, "data"):
+            shape = shapely_wkb.loads(bytes(geom.data))
+        elif isinstance(geom, str):
+            if geom.strip().upper().startswith("POINT"):
+                shape = shapely_wkt.loads(geom)
+            else:
+                return None
+        if shape is None:
+            return None
+        centroid = shape.centroid
+        return {"type": "Point", "coordinates": [float(centroid.x), float(centroid.y)]}
+    except Exception:
+        logger.warning("Could not read a stored point geometry as WKT", exc_info=True)
+        return None
+
+
+def _run_assets(run, run_uuid) -> list:
+    """The files a finished run left behind, as asset descriptors.
+
+    Read from the run's own workspace rather than from a shared artifact
+    directory: those are keyed by run id as well, but the workspace is the
+    directory the pipeline recorded for this run, so it is the one that is known
+    to belong to it.
+
+    The download URL is the run's artifact route. That route is an unauthenticated
+    GET today; when it requires a token, these URLs have to move behind the
+    authenticated helper the way `roughness_geojson_url` already notes.
+    """
+    workspace = (run.workspace_dir or "").strip()
+    if not workspace:
+        return []
+
+    directory = Path(workspace)
+    if not directory.is_dir():
+        return []
+
+    assets = []
+    for entry in sorted(directory.iterdir()):
+        if not entry.is_file():
+            continue
+        try:
+            stat = entry.stat()
+        except OSError:
+            continue
+        assets.append(
+            {
+                "id": entry.name,
+                "file_name": entry.name,
+                "original_filename": entry.name,
+                "kind": _asset_kind(entry),
+                "bucket": "runs",
+                "key": f"{run_uuid}/{entry.name}",
+                "supabase_url": f"/api/analysis/runs/{run_uuid}/analytics/{entry.name}",
+                "content_type": _asset_media_type(entry),
+                "size_bytes": stat.st_size,
+                "sha256": None,
+                "created_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "run": str(run_uuid),
+                "org": run.organisation_id,
+            }
+        )
+    return assets
+
+
+_ASSET_MEDIA_TYPES = {
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".txt": "text/plain",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".html": "text/html",
+    ".shp": "application/octet-stream",
+}
+
+
+def _asset_media_type(entry) -> str:
+    return _ASSET_MEDIA_TYPES.get(entry.suffix.lower(), "application/octet-stream")
+
+
+def _asset_kind(entry) -> str:
+    """What sort of artifact this is, from its name.
+
+    The pipeline writes into named subdirectories, so the leading path part is
+    the kind. Files written flat into the workspace root are data of unknown
+    kind and are labelled as such rather than guessed at from the extension.
+    """
+    parts = entry.parts
+    if len(parts) >= 2:
+        return parts[-2].upper()
+    return "FILE"
+
+
+def _user_summary(db: Session, user_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Who uploaded a run, in the shape the detail page names them with.
+
+    Null rather than a placeholder when the profile was never written: a run whose
+    uploader is unknown should say so instead of naming a person who may not have
+    uploaded it.
+    """
+    if not user_id:
+        return None
+    from app.models.admin import UserProfile
+
+    profile = db.query(UserProfile).filter(UserProfile.clerk_user_id == str(user_id)).first()
+    if profile is None:
+        return {
+            "id": str(user_id),
+            "username": str(user_id),
+            "email": "",
+            "full_name": None,
+        }
+    return {
+        "id": profile.clerk_user_id,
+        "username": profile.username or profile.clerk_user_id,
+        "email": profile.email or "",
+        "full_name": profile.full_name,
+    }
+
+
+def _team_payload(db: Session, organisation_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The team a run belongs to, when its organisation has exactly one.
+
+    `SurveyRun` records an organisation and not a team, so there is no team id to
+    read. Where an organisation has a single team that team is what the run is
+    filed under; where it has several the run belongs to the organisation and the
+    team is reported as unknown, because picking the first would attach the run
+    to a team nobody chose.
+    """
+    if not organisation_id:
+        return None
+    from app.models.organisation import Organisation, Team
+
+    try:
+        parsed = uuid.UUID(str(organisation_id))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+    org = db.query(Organisation).filter(Organisation.id == parsed).first()
+    if org is None:
+        return None
+
+    teams = db.query(Team).filter(Team.organisation_id == org.id).order_by(Team.created_at.asc()).all()
+    if len(teams) != 1:
+        return None
+    team = teams[0]
+
+    return {
+        "id": str(team.id),
+        "org": {
+            "id": str(org.id),
+            "name": org.name,
+            "is_active": True,
+            "created_at": org.created_at.isoformat() if org.created_at else None,
+            "is_personal": bool(org.is_personal),
+            "owner": org.owner_id,
+        },
+        "name": team.name,
+        "description": team.description,
+        # There is no flag on the team itself. A personal workspace with a single
+        # team is its default team by construction, and anything else is not.
+        "is_default_personal": bool(org.is_personal),
+        "is_active": True,
+        "created_at": team.created_at.isoformat() if team.created_at else None,
+    }
+
+
+def _map_matching_payload(db: Session, run_uuid) -> Optional[Dict[str, Any]]:
+    """The run's map matching row, in the shape the detail card reads."""
+    from app.models.survey import MapMatchingRun
+
+    match = db.query(MapMatchingRun).filter(MapMatchingRun.run_id == run_uuid).first()
+    if match is None:
+        return None
+    return {
+        "id": match.id,
+        "run_id": str(match.run_id),
+        "matched_road_id": match.matched_road_id,
+        "match_status": match.match_status,
+        "match_method": match.match_method,
+        "centerline_wkt": match.centerline_wkt,
+        "snapped_trajectory_wkt": match.snapped_trajectory_wkt,
+        "chainage_min_m": match.chainage_min_m,
+        "chainage_max_m": match.chainage_max_m,
+        "matched_distance_m": match.matched_distance_m,
+        "road_length_m": match.road_length_m,
+        "max_distance_m": match.max_distance_m,
+        "matched_points": match.matched_points,
+        "total_points": match.total_points,
+        "unmatched_points": match.unmatched_points,
+        "snapped_coords": match.snapped_coords,
+        "geom_location": _centroid_of_linestring(match.snapped_trajectory_wkt),
+    }
+
+
+def _centroid_of_linestring(wkt: Optional[str]):
+    """A LineString as its centroid point, or None."""
+    if not wkt:
+        return None
+    try:
+        from shapely import wkt as shapely_wkt
+
+        centroid = shapely_wkt.loads(wkt).centroid
+        return {"type": "Point", "coordinates": [float(centroid.x), float(centroid.y)]}
+    except Exception:
+        return None
+
+
+def _iri_segment_payloads(db: Session, run_uuid) -> list:
+    """This run's 50 m segments, as the detail table reads them."""
+    segments = (
+        db.query(IRISegment)
+        .filter(IRISegment.run_id == run_uuid)
+        .order_by(IRISegment.segment_start_m)
+        .all()
+    )
+    return [
+        {
+            "id": segment.id,
+            "run_id": str(run_uuid),
+            "road_id": segment.road_id,
+            "segment_start_m": segment.segment_start_m,
+            "segment_end_m": segment.segment_end_m,
+            "iri_value": segment.iri_value,
+            "simple_iri": segment.simple_iri,
+            "astm_qcm_iri": segment.astm_qcm_iri,
+            "astm_pci_segment": segment.astm_pci_segment,
+            "roadessy_pci_segment": segment.roadessy_pci_segment,
+            "classification": segment.classification,
+            # Segments have no geometry of their own; the run's trajectory
+            # placement is published separately as a FeatureCollection.
+            "geom_location": None,
+        }
+        for segment in segments
+    ]
+
+
+def _tracked_defect_payloads(db: Session, run_uuid) -> list:
+    """This run's tracked defects, with position and chainage."""
+    defects = (
+        db.query(TrackedDefect)
+        .filter(TrackedDefect.run_id == run_uuid)
+        .order_by(TrackedDefect.chainage_m, TrackedDefect.id)
+        .all()
+    )
+    return [
+        {
+            "id": defect.id,
+            "run_id": str(run_uuid),
+            "track_id": defect.track_id,
+            "failure_mode": defect.failure_mode,
+            "max_area_m2": defect.max_area_m2,
+            "max_width_mm": defect.max_width_mm,
+            "max_depth_mm": defect.max_depth_mm,
+            "mean_depth_mm": defect.mean_depth_mm,
+            "depth_confidence": defect.depth_confidence,
+            "depth_method": defect.depth_method,
+            "depth_message": defect.depth_message,
+            "deduct_value": defect.deduct_value,
+            "image_path": defect.image_path,
+            "astm_distress_type": defect.astm_distress_type,
+            "ghana_distress_type": defect.ghana_distress_type,
+            "ghana_rating_1to9": defect.ghana_rating_1to9,
+            "yolo_class_id": defect.yolo_class_id,
+            "confidence": defect.confidence,
+            "chainage_m": defect.chainage_m,
+            "station_m": defect.station_m,
+            "geom_location": _geometry_point(defect.geom_location),
+            "image_url": (
+                f"/api/analysis/runs/{run_uuid}/defects/{defect.track_id}/image"
+                if defect.image_path and defect.track_id is not None
+                else None
+            ),
+        }
+        for defect in defects
+    ]
 
 
 def _public_base_url(request: Optional[Request]) -> str:
@@ -291,6 +588,17 @@ async def get_run_detail(
         "astm_upsampling_info": run.astm_upsampling_info,
         "potholes": _pothole_feature_collection(db, run_uuid, title),
         "roughness_geojson_url": None,
+        # The detail page reads the run's evidence, not only its headline
+        # numbers, so the segments, the defects and the map matching are
+        # resolved here rather than left to a component to fetch by a route that
+        # may not exist. `all_roughness_segments` above stays the GeoJSON form
+        # the map consumes; these are the rows the tables consume.
+        "all_assets": _run_assets(run, run_uuid),
+        "created_by": _user_summary(db, run.user_id),
+        "team": _team_payload(db, run.organisation_id),
+        "iri_segments": _iri_segment_payloads(db, run_uuid),
+        "tracked_defects": _tracked_defect_payloads(db, run_uuid),
+        "map_matching": _map_matching_payload(db, run_uuid),
     }
 
     if inline_segments:

@@ -14,6 +14,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
+from app.core.camera import (
+    DEFAULT_CAMERA_CX,
+    DEFAULT_CAMERA_CY,
+    DEFAULT_CAMERA_FX,
+    DEFAULT_CAMERA_FY,
+    DEFAULT_CAMERA_HEIGHT_M,
+    DEFAULT_CAMERA_TILT_DEG,
+)
 from app.services.vision.ground_plane import PavementHomography
 
 #: `app/services/vision/service.py` is four levels below the repository root, so
@@ -216,11 +224,18 @@ class FrameGapDetector:
         values = np.asarray(self._differences, dtype=float)
         median = float(np.median(values))
         deviation = float(np.median(np.abs(values - median)))
-        if deviation <= 0.0:
-            # A perfectly regular video: every step identical, nothing to flag.
-            return {"judged": True, "suspected_gaps": 0, "median_step": round(median, 3)}
+        scale = deviation
+        if scale <= 0.0:
+            # The MAD is zero whenever most steps are identical, which a fixed
+            # camera or a duplicated-frame stretch produces. Returning "no gaps"
+            # there swallowed real discontinuities: a threshold built from zero
+            # spread can never be exceeded, so the one frame that differed was
+            # never flagged. The mean absolute deviation is non-zero whenever
+            # anything moved at all and still zero for a genuinely regular video,
+            # so it separates those two cases instead of collapsing them.
+            scale = float(np.mean(np.abs(values - median)))
 
-        threshold = median + self.OUTSPLIER_SCALE * deviation
+        threshold = median + self.OUTLIER_SCALE * scale
         outliers = np.where(values > threshold)[0]
         return {
             "judged": True,
@@ -330,12 +345,12 @@ class VisionAnalysisService:
     def __init__(
         self, 
         model_path: Optional[str] = None, 
-        camera_height_m: float = 2.5, 
-        camera_tilt_deg: float = 0.0, 
-        fx: float = 1000.0, 
-        fy: float = 1000.0, 
-        cx: float = 960.0, 
-        cy: float = 540.0, 
+        camera_height_m: float = DEFAULT_CAMERA_HEIGHT_M, 
+        camera_tilt_deg: float = DEFAULT_CAMERA_TILT_DEG, 
+        fx: float = DEFAULT_CAMERA_FX, 
+        fy: float = DEFAULT_CAMERA_FY, 
+        cx: float = DEFAULT_CAMERA_CX, 
+        cy: float = DEFAULT_CAMERA_CY, 
         distortion_coefficients: Optional[str] = None,
         enable_depth_estimation: bool = True,
         dav2e_encoder: str = "vits",

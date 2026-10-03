@@ -13,7 +13,8 @@ import pandas as pd
 from geoalchemy2 import WKTElement
 from shapely.geometry import LineString
 
-from app.core.config import ASTM_QCM_IRI_ENABLED
+from app.core.camera import resolve_camera_geometry
+from app.core.config import ASTM_QCM_IRI_ENABLED, astm_track_state
 from app.core.logger import get_pipeline_logger, monitor
 from app.database.session import IS_POSTGRES, SessionLocal
 from app.models.calibration import CalibrationProfile
@@ -35,7 +36,9 @@ from app.services.vision import (
 )
 from app.services.vision.depth import (
     DepthAnythingV2Estimator,
+    GeometryAnchoredDepthScaler,
     MBTPAreaEstimator,
+    create_depth_scaler,
 )
 
 logger = get_pipeline_logger("heavy_compute")
@@ -55,26 +58,6 @@ def _coerce_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
         return uuid.UUID(str(value))
     except (ValueError, AttributeError, TypeError):
         return None
-
-
-def _parse_distortion(value: Any) -> Optional[str]:
-    """Normalize distortion coefficients to a JSON array string for OpenCV."""
-    if not value:
-        return None
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        if text.startswith("["):
-            return text
-        # Comma or space separated legacy form.
-        parts = [part for part in text.replace(",", " ").split() if part]
-        if not parts:
-            return None
-        return json.dumps([float(part) for part in parts])
-    if isinstance(value, (list, tuple)):
-        return json.dumps([float(item) for item in value])
-    return None
 
 
 class HeavyComputePipeline:
@@ -162,7 +145,29 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         self.project_id = project_id
         self.road_uuid = road_uuid
 
-        logger.info("Starting Heavy Compute Pipeline (2 pipelines: ASTM + Roadessy)", run_id=self.run_id)
+        # The banner names the tracks that will actually run. It used to say
+        # "2 pipelines: ASTM + Roadessy" unconditionally, which becomes a lie the
+        # moment the ASTM track is switched off: a reader looking for the ASTM IRI
+        # in this log would take its absence for a fault rather than for the
+        # switch. The reason is logged with it, so a muted track is a stated
+        # decision on the record.
+        astm_state = astm_track_state()
+        tracks = "ASTM + Roadessy" if astm_state["running"] else "Roadessy only"
+        logger.info(
+            f"Starting Heavy Compute Pipeline ({tracks})",
+            run_id=self.run_id,
+        )
+        if not astm_state["running"]:
+            logger.warning(
+                "ASTM track is disabled in this build and will not be computed: "
+                f"no ASTM PCI, no ASTM QCM IRI, no ASTM segments. {astm_state['reason']}",
+                run_id=self.run_id,
+            )
+        if not astm_state["pci_enabled"]:
+            logger.warning(
+                f"ASTM D6433 PCI is not published: {astm_state['pci_reason']}",
+                run_id=self.run_id,
+            )
 
         # 1. Load and parse input datasets (shared)
         gps_df = self._load_gps_data(gps_file_path)
@@ -213,15 +218,42 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         )
         
         # 3b. ASTM QCM (100Hz upsampled, quality flags) - Pipeline 1
-        astm_qcm = InertialRefineryService.process_astm_qcm(
-            timestamps=vibe_timestamps,
-            accel_z=vibe_accel,
-            speeds_kmh=vibe_speeds,
-            run_id=self.run_id,
-            target_fs=100.0,
-            target_dx=0.025,
-            v_ref_kmh=80.0,
-        )
+        #
+        # Skipped outright when the ASTM track is muted: this resamples to 100 Hz
+        # and runs the quarter-car simulation, which is not cheap, and nothing
+        # downstream reads the result. `ASTM_QCM_IRI_ENABLED` used to guard only
+        # a CSV write, so setting it false changed nothing but the output files.
+        # An empty-but-valid result rather than None: everything downstream reads
+        # `.iri_segments` and `.iri_m_km`, and an explicit empty result says
+        # "measured nothing" where None would mean "not supplied" and force a
+        # None-check at every reader. The 0.0 IRI it carries never reaches the
+        # database — `_persist_db_records` stores NULL when this is muted.
+        astm_qcm = None
+        if ASTM_QCM_IRI_ENABLED:
+            astm_qcm = InertialRefineryService.process_astm_qcm(
+                timestamps=vibe_timestamps,
+                accel_z=vibe_accel,
+                speeds_kmh=vibe_speeds,
+                run_id=self.run_id,
+                target_fs=100.0,
+                target_dx=0.025,
+                v_ref_kmh=80.0,
+            )
+        else:
+            astm_qcm = ASTMQCMResult(
+                iri_m_km=0.0,
+                total_distance_m=0.0,
+                iri_segments=[],
+                sample_rate_hz=0.0,
+                quality_status="muted",
+                quality_flags=["astm_qcm_iri_muted"],
+                upsampling_info={},
+            )
+            logger.info(
+                "ASTM QCM IRI muted, skipping the quarter-car simulation "
+                f"(100 Hz resample and simulation not run; ASTM_QCM_IRI_ENABLED=false)",
+                run_id=self.run_id,
+            )
 
         # 4. Process Spatial GPS Trajectory & Map-Matching (shared)
         map_match_result = SpatialService.map_match_trajectory(
@@ -302,37 +334,60 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             pothole_depths = {}
             if astm_vision.detections and abs_depth is not None:
                 logger.info("Running pothole depth detection (MBTP + RGB Segmentation)", run_id=self.run_id)
-                
+
+                # Scale relative depth to metric using geometry-anchored scaling
+                K_cam = np.array([[cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1]], dtype=np.float64)
+                geom_scaler = create_depth_scaler(
+                    camera_height_m=cam_height,
+                    pitch_deg=cam_tilt,
+                    roll_deg=0.0,
+                    fx=cam_fx, fy=cam_fy, cx=cam_cx, cy=cam_cy,
+                )
+                metric_depth = geom_scaler.apply(abs_depth, K_cam, cam_tilt, 0.0, cam_height)
+
+                # Open one capture for all pothole frame reads
+                cap_depth = cv2.VideoCapture(video_file_path)
+
                 # Process each pothole detection
                 for det in astm_vision.detections:
                     if det.get("yolo_class_id") == 4:  # Pothole class
                         bbox = det.get("bbox")  # [x1, y1, x2, y2]
                         if bbox:
-                            # Read the frame at the detection's frame index
-                            # For now, use the first frame as reference
-                            cap = cv2.VideoCapture(video_file_path)
-                            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                            ret, frame = cap.read()
-                            cap.release()
-                            
+                            # Read the frame at the detection's actual frame index
+                            frame_idx = int(det.get("frame_idx", 0))
+                            cap_depth.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                            ret, frame = cap_depth.read()
+
                             if frame is not None:
                                 # Run MBTP estimation
-                                mbtp_result = mbtp_estimator.estimate(
-                                    rgb_image=frame,
-                                    depth_map=abs_depth,
-                                    bbox=bbox,
-                                    K=np.array([[cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1]], dtype=np.float64),
-                                    ground_ref=0.0  # Use ground reference from depth map
-                                )
-                                pothole_depths[det.get("chainage_m", 0)] = mbtp_result.depth_m
-                                
-                                # Update detection with MBTP results
-                                det["mbtp_area_m2"] = mbtp_result.area_m2
-                                det["mbtp_depth_m"] = mbtp_result.depth_m
-                                det["mbtp_volume_m3"] = mbtp_result.volume_m3
-                                det["mbtp_confidence"] = mbtp_result.confidence
-                                det["mbtp_method"] = "mbtp"
-                                logger.metric("pothole_depth", "mbtp_estimate", mbtp_result.depth_m, run_id=self.run_id)
+                                try:
+                                    mbtp_result = mbtp_estimator.estimate(
+                                        rgb_image=frame,
+                                        depth_map=metric_depth,
+                                        bbox=bbox,
+                                        K=K_cam,
+                                        ground_ref=None,
+                                    )
+                                    pothole_depths[det.get("chainage_m", 0)] = mbtp_result.depth_m
+
+                                    # Update detection with MBTP results
+                                    det["mbtp_area_m2"] = mbtp_result.area_m2
+                                    det["mbtp_depth_m"] = mbtp_result.depth_m
+                                    det["mbtp_volume_m3"] = mbtp_result.volume_m3
+                                    det["mbtp_confidence"] = mbtp_result.confidence
+                                    det["mbtp_method"] = "mbtp"
+
+                                    # Update depth fields for Roadessy severity classification
+                                    if mbtp_result.depth_m > 0:
+                                        depth_mm = round(mbtp_result.depth_m * 1000.0, 1)
+                                        det["depth_mm"] = depth_mm
+                                        det["pothole_depth_mm"] = depth_mm
+
+                                    logger.metric("pothole_depth", "mbtp_estimate", mbtp_result.depth_m, run_id=self.run_id)
+                                except Exception as exc:
+                                    logger.warning(f"MBTP estimation failed for pothole at chainage {det.get('chainage_m')}: {exc}", run_id=self.run_id)
+
+                cap_depth.release()
             
             # 5d. Roadessy Vision (Ghana Table 3) - Pipeline 2
             # Reuse the same detections but with Ghana mapping
@@ -665,73 +720,25 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         """Resolve camera parameters.
 
         Precedence: explicit request metadata -> stored calibration profile ->
-        hardcoded defaults. Intrinsics may be nested under an "intrinsics" key,
-        matching the shape produced by /analysis/calibrate-checkerboard.
+        the shared fallback in `app.core.camera`. Intrinsics may be nested under
+        an "intrinsics" key, matching the shape produced by
+        /analysis/calibrate-checkerboard.
+
+        The fallbacks live in `app.core.camera` rather than here, because three
+        routes used to carry their own and disagreed; the same video analyzed
+        through two of them produced two different ground scales and so two
+        different defect sizes, invisibly, because the reported IRI was the same
+        either way.
         """
-        default_height, default_tilt = 1.5, 15.0
-        default_fx, default_fy = 1000.0, 1000.0
-        default_cx, default_cy = 960.0, 540.0
-        default_distortion = None
-
-        resolved = {
-            "camera_height_m": default_height,
-            "camera_tilt_deg": default_tilt,
-            "fx": default_fx,
-            "fy": default_fy,
-            "cx": default_cx,
-            "cy": default_cy,
-            "distortion": default_distortion,
-        }
-
-        if camera_profile_id:
-            profile = (
-                self.db.query(CalibrationProfile)
-                .filter(CalibrationProfile.id == camera_profile_id)
-                .first()
-            )
-            if profile:
-                for field in ("fx", "fy", "cx", "cy"):
-                    value = getattr(profile, field, None)
-                    if value is not None:
-                        resolved[field] = float(value)
-                distortion = getattr(profile, "distortion_coefficients", None)
-                if distortion:
-                    parsed = _parse_distortion(distortion)
-                    if parsed is not None:
-                        resolved["distortion"] = parsed
-
-        if camera_overrides:
-            intrinsics = camera_overrides.get("intrinsics") or {}
-            for field, keys in (
-                ("camera_height_m", ("camera_height_meters", "camera_height_m")),
-                ("camera_tilt_deg", ("camera_tilt_degrees", "camera_tilt_deg")),
-            ):
-                for key in keys:
-                    value = camera_overrides.get(key)
-                    if value is not None:
-                        resolved[field] = float(value)
-                        break
-            for field in ("fx", "fy", "cx", "cy"):
-                value = camera_overrides.get(field, intrinsics.get(field))
-                if value is not None:
-                    resolved[field] = float(value)
-            distortion = camera_overrides.get(
-                "distortion_coefficients", intrinsics.get("distortion_coefficients")
-            )
-            if distortion:
-                parsed = _parse_distortion(distortion)
-                if parsed is not None:
-                    resolved["distortion"] = parsed
-
-        return (
-            resolved["camera_height_m"],
-            resolved["camera_tilt_deg"],
-            resolved["fx"],
-            resolved["fy"],
-            resolved["cx"],
-            resolved["cy"],
-            resolved["distortion"],
+        resolved = resolve_camera_geometry(
+            overrides=camera_overrides,
+            stored=self.db.query(CalibrationProfile)
+            .filter(CalibrationProfile.id == camera_profile_id)
+            .first()
+            if camera_profile_id
+            else None,
         )
+        return resolved.as_tuple()
 
     def _save_detected_frames(
         self,
@@ -1199,15 +1206,20 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 project_id=project_id_uuid,
                 road_id=road_id_uuid,
                 
-                # Pipeline 1: ASTM. astm_pci is None while the PCI is muted;
-                # the column is nullable and stays null rather than being
-                # filled with a placeholder number. QCM IRI is unaffected.
+                # Pipeline 1: ASTM. astm_pci and astm_qcm_iri are both None while
+                # their track is muted; the columns are nullable and stay null
+                # rather than being filled with a placeholder number. A 0.0 here
+                # would read as a measured zero IRI, or a perfect road.
                 astm_pci=(
                     float(astm_result["astm_pci"])
                     if astm_result.get("astm_pci") is not None
                     else None
                 ),
-                astm_qcm_iri=float(astm_result["qcm_iri_m_km"]),
+                astm_qcm_iri=(
+                    float(astm_result["qcm_iri_m_km"])
+                    if astm_result.get("qcm_iri_m_km") is not None
+                    else None
+                ),
                 astm_quality_flags=astm_result["quality_flags"],
                 astm_upsampling_info=astm_result["upsampling_info"],
                 

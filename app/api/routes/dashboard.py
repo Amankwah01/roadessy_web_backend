@@ -177,6 +177,69 @@ async def get_dashboard_summary(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch dashboard summary: {str(e)}")
 
 
+@router.get("/queue", response_class=JSONResponse)
+async def get_processing_queue(
+    org_id: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Runs that are uploaded but not finished, so the dashboard can show a queue.
+
+    Derived from what the runs table already records rather than from a separate
+    job table: a run is in flight while it has a workspace and has published
+    neither index, and it leaves the queue when `processing_metadata` records a
+    finish or either index appears. A second source of truth about what is
+    running would be a second thing to keep in step with the pipeline.
+
+    There is no completion percentage to report. The pipeline writes its
+    progress as log lines and artifacts, not as a counter, so `progress` is null
+    and the client shows an indeterminate state rather than a number invented
+    from how long the run has been going.
+    """
+    query = db.query(SurveyRun).filter(
+        SurveyRun.final_pci.is_(None),
+        SurveyRun.roadessy_pci.is_(None),
+        SurveyRun.astm_pci.is_(None),
+        SurveyRun.removed_at.is_(None),
+    )
+    if org_id:
+        query = query.filter(SurveyRun.organisation_id == org_id)
+
+    runs = query.order_by(SurveyRun.created_at.desc()).limit(limit).all()
+
+    items = []
+    for run in runs:
+        metadata = run.processing_metadata if isinstance(run.processing_metadata, dict) else {}
+        stage = metadata.get("stage") or metadata.get("phase")
+        finished_at = next(
+            (
+                metadata.get(key)
+                for key in ("finished_at", "completed_at", "updated_at")
+                if isinstance(metadata.get(key), str)
+            ),
+            None,
+        )
+        items.append(
+            {
+                "id": str(run.run_id),
+                "run_id": str(run.run_id),
+                "name": run.name or str(run.run_id),
+                "status": "DONE" if finished_at else "PROCESSING",
+                "stage": stage if isinstance(stage, str) else None,
+                "progress": None,
+                "created_at": run.created_at.isoformat() if run.created_at else None,
+                "video_uploaded": bool(run.video_file_path),
+                "vibration_uploaded": bool(run.vibration_file_path),
+                "gps_uploaded": bool(run.gps_file_path),
+            }
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"items": items, "count": len(items)},
+    )
+
+
 @router.get("/runs/all", response_class=JSONResponse)
 async def list_all_runs(
     org_id: Optional[str] = Query(None),

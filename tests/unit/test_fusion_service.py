@@ -372,6 +372,13 @@ class TestAstmPciIsMutedByDefault:
         assert breakdown["qcm_iri_m_km"] == 4.2
 
     def test_the_pipeline_reports_no_rating_and_no_segments(self):
+        """The whole ASTM track is muted, not just its PCI.
+
+        So the QCM IRI is withheld as well: the measurement was never taken for
+        this build, and reporting the 4.2 m/km the fixture carries would put a
+        figure in the report that no run can produce. None reads as "not
+        reported", which is what a muted track actually means.
+        """
         result = PavementConditionFusioneer.compute_astm_pipeline(
             astm_qcm=self._qcm(),
             astm_vision=self._vision(),
@@ -381,7 +388,9 @@ class TestAstmPciIsMutedByDefault:
         assert result["astm_pci_class"] is None
         assert result["astm_pci_enabled"] is False
         assert result["segment_pci_50m"] == []
-        assert result["qcm_iri_m_km"] == 4.2
+        assert result["qcm_iri_m_km"] is None
+        assert result["qcm_iri_segments_50m"] == []
+        assert result["astm_track_disabled_reason"].strip()
 
     def test_the_roadessy_pipeline_is_untouched(self):
         """The two pipelines are independent; disabling one must not silence

@@ -1,22 +1,15 @@
 # app/database/session.py
 import os
-from pathlib import Path
 from typing import Generator
 from urllib.parse import quote_plus
 
-from dotenv import load_dotenv
+# Loading .env is a side effect of importing this module; it now happens in
+# app.core.env so that modules imported before this one still see the
+# environment.
+from app.core.env import get_env  # noqa: F401
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
-
-# 1. Load environment variables (.env first, fallback to .env.example)
-_root_dir = Path(__file__).resolve().parents[2]
-_env_path = _root_dir / ".env"
-if not _env_path.exists():
-    _env_path = _root_dir / ".env.example"
-
-if _env_path.exists():
-    load_dotenv(_env_path)
 
 # 2. Extract database parameters safely from environment
 DB_DRIVER = os.getenv("DB_DRIVER", "postgresql+psycopg2")

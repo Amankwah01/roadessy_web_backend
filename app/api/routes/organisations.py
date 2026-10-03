@@ -14,13 +14,14 @@ a second copy of those rules on the client is a second copy that will drift.
 
 import datetime
 import logging
+import os
 import secrets
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -102,8 +103,9 @@ def _org_permissions(role: Optional[str], is_personal: bool) -> Dict[str, bool]:
         "can_manage_members": is_admin,
         "can_manage_teams": is_admin,
         # A personal workspace is one person's, so there is no org-wide
-        # authoring to hand out inside it.
-        "can_author_projects": is_admin and not is_personal,
+        # authoring to hand out *to others* inside it.
+        # The owner can still create projects in their own personal workspace.
+        "can_author_projects": is_admin and (not is_personal or is_owner),
     }
 
 
@@ -167,6 +169,139 @@ async def list_organisations(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content=[_org_payload(db, org, membership) for org, membership in rows],
+    )
+
+
+async def _get_or_create_personal_workspace(user_id: str, db: Session) -> Organisation:
+    """Get the user's personal workspace, creating it if it doesn't exist."""
+    # First check if user already has a personal workspace
+    existing = (
+        db.query(Organisation)
+        .join(OrganisationMembership, OrganisationMembership.organisation_id == Organisation.id)
+        .filter(
+            OrganisationMembership.user_id == user_id,
+            Organisation.is_personal.is_(True),
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    # Create personal workspace
+    org = Organisation(
+        name="Personal Workspace",
+        slug=f"personal-{user_id[:8]}",
+        is_personal=True,
+        owner_id=user_id,
+    )
+    db.add(org)
+    db.flush()
+
+    membership = OrganisationMembership(
+        organisation_id=org.id,
+        user_id=user_id,
+        role=OWNER,
+    )
+    db.add(membership)
+    db.commit()
+    db.refresh(org)
+    return org
+
+
+class SyncOrganisationsRequest(BaseModel):
+    """Request to sync organizations.
+
+    The organizations come from the caller rather than being fetched here: the
+    identity provider is the frontend's concern, and this service does not call
+    it.
+    """
+
+    external_organizations: List[Dict[str, str]] = Field(
+        default=[],
+        # The old name is still accepted so a deployed frontend keeps working
+        # across the rename.
+        validation_alias=AliasChoices("external_organizations", "clerk_organizations"),
+    )
+
+
+@router.post("/sync", response_class=JSONResponse)
+async def sync_organisations(
+    payload: SyncOrganisationsRequest,
+    principal: dict = Depends(get_principal),
+    db: Session = Depends(get_db),
+):
+    """Sync externally-held organizations and ensure the personal workspace exists.
+
+    Called on first login and whenever the caller's organizations change. The
+    organizations arrive in the request because the frontend holds the identity
+    provider session; this service does not call the provider itself.
+    """
+    user_id = _caller(principal)
+    if not user_id or user_id == "local-dev-user":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    # Ensure personal workspace exists
+    personal_org = await _get_or_create_personal_workspace(user_id, db)
+
+    # Sync the externally-held organizations sent by the frontend
+    for external_org in payload.external_organizations:
+        external_org_id = external_org.get("id")
+        external_org_name = external_org.get("name", "Unnamed Organization")
+        external_org_slug = external_org.get("slug")
+
+        if not external_org_id or not external_org_slug:
+            continue
+
+        # Check if this org already exists (by slug)
+        existing = db.query(Organisation).filter(Organisation.slug == external_org_slug).first()
+        if existing:
+            # Ensure user is a member
+            membership = db.query(OrganisationMembership).filter(
+                OrganisationMembership.organisation_id == existing.id,
+                OrganisationMembership.user_id == user_id,
+            ).first()
+            if not membership:
+                membership = OrganisationMembership(
+                    organisation_id=existing.id,
+                    user_id=user_id,
+                    role=MEMBER,
+                )
+                db.add(membership)
+        else:
+            # Create new organization
+            org = Organisation(
+                name=external_org_name,
+                slug=external_org_slug,
+                is_personal=False,
+                owner_id=user_id,
+            )
+            db.add(org)
+            db.flush()
+
+            membership = OrganisationMembership(
+                organisation_id=org.id,
+                user_id=user_id,
+                role=OWNER,
+            )
+            db.add(membership)
+
+    db.commit()
+
+    # Return all organizations including the personal one
+    rows = (
+        db.query(Organisation, OrganisationMembership)
+        .join(
+            OrganisationMembership,
+            OrganisationMembership.organisation_id == Organisation.id,
+        )
+        .filter(OrganisationMembership.user_id == user_id)
+        .order_by(Organisation.is_personal.desc(), Organisation.created_at.asc())
+        .all()
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"organisations": [_org_payload(db, org, membership) for org, membership in rows]},
     )
 
 

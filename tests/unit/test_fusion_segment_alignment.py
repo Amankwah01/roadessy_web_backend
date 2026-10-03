@@ -46,17 +46,33 @@ def _simple(segment_count, iri=2.5):
 
 
 @pytest.fixture
-def astm_pci_on(monkeypatch):
+def astm_track_on(monkeypatch):
+    """Opt in to the whole muted ASTM track, for tests that test the track itself.
+
+    Both halves are off by default now (see `app/core/config.py`), and the whole
+    track being off short-circuits `compute_astm_pipeline` before any of the
+    alignment these tests check happens. So anything asserting on ASTM output has
+    to turn it on; that these tests exist and still pass is the evidence the code
+    is retained rather than deleted.
+    """
+    from app.services.fusion import service as fusion_service
+
+    monkeypatch.setattr(fusion_service, "ASTM_PCI_ENABLED", True)
+    monkeypatch.setattr(fusion_service, "ASTM_QCM_IRI_ENABLED", True, raising=False)
+    monkeypatch.setattr(fusion_service, "ASTM_TRACK_ENABLED", True, raising=False)
+    monkeypatch.setattr(fusion_service, "ASTM_TRACK_RUNNING", True)
+    return True
+
+
+@pytest.fixture
+def astm_pci_on(astm_track_on):
     """Opt in to the muted D6433 PCI.
 
     The ASTM segment table is empty while the PCI is off, so the alignment these
     tests check cannot be observed through it. The mute is the default; this
     turns it on so the alignment logic itself stays covered.
     """
-    from app.services.fusion import service as fusion_service
-
-    monkeypatch.setattr(fusion_service, "ASTM_PCI_ENABLED", True)
-    return True
+    return astm_track_on
 
 
 def _vision(detections):
@@ -235,7 +251,7 @@ class TestPipelineAlignment:
             s["segment_index"] for s in roadessy["segment_pci_50m"] if s["roadessy_pci"] < 100.0
         ]
 
-    def test_a_jump_contaminated_track_is_refused_rather_than_used(self):
+    def test_a_jump_contaminated_track_is_refused_rather_than_used(self, astm_track_on):
         """The vibration GPS is frozen and then teleports on every KNUST trip.
 
         Projecting onto it would place each detection against a straight line
@@ -266,7 +282,7 @@ class TestPipelineAlignment:
         )
         assert result["alignment"]["aligned"] is False
 
-    def test_a_detection_from_another_road_is_left_out_rather_than_snapped_in(self):
+    def test_a_detection_from_another_road_is_left_out_rather_than_snapped_in(self, astm_track_on):
         """A GPS fix from a different trip must not become a section of this road."""
         track = _track(600.0)
         detection = _pothole_at_lat(6.60 + 100.0 / 111320.0, 10.0)

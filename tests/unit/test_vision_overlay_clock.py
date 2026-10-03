@@ -142,6 +142,12 @@ class TestBuildOverlayClock:
             overlay, "OverlayTemplateReader", lambda *a, **k: self._Stub(trained=False)
         )
         # The slow path is the OCR reader, so that is what has to answer here.
+        # `available` is stubbed as well as `read`: it reports whether an OCR
+        # engine could be imported, and without it this test measures whether the
+        # box has RapidOCR installed rather than what it is for.
+        monkeypatch.setattr(
+            overlay.VideoOverlayReader, "available", property(lambda s: True)
+        )
         monkeypatch.setattr(
             overlay.VideoOverlayReader, "read",
             lambda self, frame: OverlayReading(timestamp=frame),

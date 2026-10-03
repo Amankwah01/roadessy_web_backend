@@ -211,7 +211,38 @@ class MapMatchingIntegration:
 class SpatialService:
     """Spatial map matching engine against road network data."""
 
-    DEFAULT_MAX_DISTANCE_M = 100.0
+    #: How far the trajectory may lie from a road for that road to be a candidate
+    #: at all (`ST_DWithin` in `_find_nearest_road`). Deliberately generous: this
+    #: only decides which roads get considered, and a wider net here costs
+    #: nothing but a slower query.
+    #:
+    #: This used to be the same number as the point-match tolerance below, which
+    #: conflated two different questions — "is this road a candidate?" and "is
+    #: this point on that road?" — into one dial. Answering the first wrongly is
+    #: cheap; answering the second wrongly invents chainage.
+    ROAD_SELECTION_RADIUS_M = 100.0
+
+    #: How far an individual GPS point may lie from the chosen centreline and
+    #: still count as being on it (`matched` in `_snap_to_centerline`). Kept at
+    #: the historical 100 m so this change does not silently alter which points
+    #: match; it is now separately tunable, which the shared constant prevented.
+    POINT_MATCH_TOLERANCE_M = 100.0
+
+    #: The share of points that must land within `POINT_MATCH_TOLERANCE_M` for
+    #: the run to be reported as matched.
+    #:
+    #: Previously any single matched point made the whole run "matched", so a
+    #: survey that followed the wrong road reported success on the strength of
+    #: 10 of 893 points. Chainage was then read off a centreline the drive never
+    #: touched, which is worse than an obvious non-match: every defect position
+    #: downstream looked plausible and was wrong.
+    MIN_MATCH_RATIO = 0.5
+
+    #: `match_status` values. Reported, never branched on, so a new value is
+    #: safe for consumers that only display it.
+    MATCH_OK = "matched"
+    MATCH_POOR = "poor_match"
+    MATCH_NONE = "unmatched"
 
     #: The widest stretch of run-relative chainage a station is interpolated
     #: across. Beyond it the matched points either side are describing different
@@ -521,7 +552,7 @@ class SpatialService:
             return None
 
     @staticmethod
-    def _find_nearest_road(db: Session, gps_df: pd.DataFrame, max_distance_m: float = DEFAULT_MAX_DISTANCE_M) -> Optional[str]:
+    def _find_nearest_road(db: Session, gps_df: pd.DataFrame, max_distance_m: float = ROAD_SELECTION_RADIUS_M) -> Optional[str]:
         points = SpatialService._valid_gps_points(gps_df)
         trajectory = SpatialService._trajectory_geometry(points)
         if trajectory is None or trajectory.is_empty:
@@ -533,12 +564,28 @@ class SpatialService:
                 text("""
                     WITH trajectory AS (
                         SELECT ST_SetSRID(ST_GeomFromText(:trajectory_wkt), 4326) AS geom
+                    ),
+                    buffered AS (
+                        -- Buffer in geography (metres), then drop back to plain
+                        -- geometry, because ST_Intersection is not defined for
+                        -- geography and the length has to come out in degrees.
+                        SELECT ST_Buffer(geom::geography, :max_distance_m)::geometry AS geom
+                        FROM trajectory
                     )
-                    SELECT g.gid::VARCHAR AS road_id
+                    SELECT g.gid::VARCHAR AS road_id,
+                           ST_Length(ST_Intersection(g.geom, b.geom)::geography) AS overlap_m
                     FROM gh_roads AS g
-                    CROSS JOIN trajectory AS t
-                    WHERE ST_DWithin(g.geom::geography, t.geom::geography, :max_distance_m)
-                    ORDER BY ST_Distance(g.geom::geography, t.geom::geography) ASC
+                    CROSS JOIN buffered AS b
+                    WHERE ST_DWithin(g.geom::geography, b.geom::geography, :max_distance_m)
+                      AND ST_Intersects(g.geom, b.geom)
+                    -- Ranked by how much of the road the trajectory actually
+                    -- shares, not by the single closest approach. Ordering by
+                    -- ST_Distance picked whichever candidate merely brushed the
+                    -- track once: a parallel service road touching at a junction
+                    -- outranked the road the vehicle drove for hundreds of
+                    -- metres, and the run then matched a handful of points to
+                    -- it and still reported success.
+                    ORDER BY overlap_m DESC
                     LIMIT 1
                 """),
                 {
@@ -547,7 +594,17 @@ class SpatialService:
                 },
             ).first()
             if result and result[0]:
-                spatial_logger.info("Auto-matched trajectory to road_id=%s", result[0])
+                overlap_m = float(result[1]) if len(result) > 1 and result[1] is not None else 0.0
+                # DomainLogger.info takes the message first and then run_id, so a
+                # positional second argument lands in run_id and the %s is never
+                # substituted. That logged the road id as the run id. The road id
+                # is passed as a named field instead.
+                spatial_logger.info(
+                    f"Auto-matched trajectory to road_id={result[0]} "
+                    f"({overlap_m:.0f} m of shared centreline)",
+                    road_id=str(result[0]),
+                    overlap_m=round(overlap_m, 1),
+                )
                 return str(result[0])
             return None
         except Exception as exc:
@@ -629,8 +686,17 @@ class SpatialService:
         road_id: Optional[str] = None,
         run_id: str = "",
         db: Optional[Session] = None,
-        max_distance_m: float = DEFAULT_MAX_DISTANCE_M,
+        max_distance_m: Optional[float] = None,
     ) -> Dict[str, Any]:
+        """Snap a GPS track to a road centreline.
+
+        `max_distance_m` overrides `POINT_MATCH_TOLERANCE_M` for one call. It
+        deliberately does not move road *selection*: that is
+        `ROAD_SELECTION_RADIUS_M`, and a caller who widens the point tolerance
+        to force more points to match is asking for invented chainage.
+        """
+        if max_distance_m is None:
+            max_distance_m = SpatialService.POINT_MATCH_TOLERANCE_M
         all_points = SpatialService._valid_gps_points(gps_df)
         total_points = len(gps_df)
         trajectory_geom = SpatialService._trajectory_geometry(all_points) if all_points else None
@@ -641,7 +707,7 @@ class SpatialService:
                 "total_points": total_points,
                 "unmatched_points": total_points,
                 "matched_road_id": str(road_id) if road_id else None,
-                "match_status": "unmatched",
+                "match_status": SpatialService.MATCH_NONE,
                 "match_method": "provided" if road_id else "none",
                 "centerline_wkt": None,
                 "centerline_geojson": None,
@@ -675,12 +741,34 @@ class SpatialService:
             matched = [point for point in snapped_coords if point["matched"]]
             chainages = [point["chainage_m"] for point in matched]
             snapped_trajectory = LineString([(point["lon"], point["lat"]) for point in matched]) if len(matched) >= 2 else None
+
+            # The share of points that actually landed on the centreline decides
+            # the status. A road can be the nearest candidate and still not be
+            # the road the drive was on, and that is the case this used to
+            # report as a success.
+            judged_points = len(snapped_coords)
+            match_ratio = (len(matched) / judged_points) if judged_points else 0.0
+            if not matched:
+                match_status = cls.MATCH_NONE
+            elif match_ratio < cls.MIN_MATCH_RATIO:
+                match_status = cls.MATCH_POOR
+            else:
+                match_status = cls.MATCH_OK
+
+            # Distance-to-centreline distribution. Without it a poor match says
+            # only that it was poor; with it the log says whether the track ran
+            # 120 m off the road (wrong road chosen) or 2 m off it (poor centreline
+            # geometry or GPS drift), which are different problems with different
+            # fixes.
+            distances = [float(point["distance_m"]) for point in snapped_coords]
+
             result = {
                 "matched_points": len(matched),
                 "total_points": total_points,
                 "unmatched_points": total_points - len(matched),
                 "matched_road_id": effective_road_id,
-                "match_status": "matched" if matched else "unmatched",
+                "match_status": match_status,
+                "match_ratio": round(match_ratio, 4),
                 "match_method": match_method,
                 "centerline_wkt": resolved_centerline_wkt,
                 "centerline_geojson": mapping(centerline_geom) if centerline_geom is not None else None,
@@ -692,14 +780,39 @@ class SpatialService:
                 "matched_distance_m": float(max(chainages) - min(chainages)) if chainages else 0.0,
                 "road_length_m": road_length_m,
                 "max_distance_m": float(max_distance_m),
+                "min_match_ratio": cls.MIN_MATCH_RATIO,
+                # Mean and median over every point, matched or not, so a poor
+                # match reports how far off it was.
+                "mean_distance_m": round(sum(distances) / len(distances), 2) if distances else 0.0,
+                "median_distance_m": round(float(np.median(distances)), 2) if distances else 0.0,
+                "max_distance_observed_m": round(max(distances), 2) if distances else 0.0,
             }
-            spatial_logger.info(
-                "Map matching completed",
-                run_id=run_id,
-                matched_points=len(matched),
-                total_points=total_points,
-                road_id=effective_road_id,
-            )
+            if match_status == cls.MATCH_POOR:
+                # Logged at warning, and loudly: chainage below is read off a
+                # centreline this drive mostly did not follow, so every defect
+                # positioned from it is suspect.
+                spatial_logger.warning(
+                    f"Map matching is poor: only {len(matched)} of {judged_points} "
+                    f"points fell within {max_distance_m:.0f} m of road "
+                    f"{effective_road_id} (ratio {match_ratio:.2%}, need "
+                    f"{cls.MIN_MATCH_RATIO:.0%}, median offset "
+                    f"{result['median_distance_m']:.0f} m). Chainage and any "
+                    "defect positions derived from it are unreliable.",
+                    run_id=run_id,
+                    matched_points=len(matched),
+                    total_points=total_points,
+                    road_id=effective_road_id,
+                    match_ratio=round(match_ratio, 4),
+                )
+            else:
+                spatial_logger.info(
+                    "Map matching completed",
+                    run_id=run_id,
+                    matched_points=len(matched),
+                    total_points=total_points,
+                    road_id=effective_road_id,
+                    match_ratio=round(match_ratio, 4),
+                )
             return result
 
         raw_coords = cls._raw_chainage(all_points)
@@ -708,7 +821,7 @@ class SpatialService:
             "total_points": total_points,
             "unmatched_points": total_points,
             "matched_road_id": effective_road_id,
-            "match_status": "unmatched",
+            "match_status": SpatialService.MATCH_NONE,
             "match_method": match_method,
             "centerline_wkt": None,
             "centerline_geojson": None,

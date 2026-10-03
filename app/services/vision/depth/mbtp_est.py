@@ -167,6 +167,7 @@ class MBTPAreaEstimator:
     def compute_triangle_area(self, triangle: np.ndarray, 
                               depth_map: np.ndarray,
                               fx: float, fy: float,
+                              cx: float, cy: float,
                               ground_ref: float) -> float:
         """
         Compute real-world area of a triangle using pinhole projection.
@@ -258,7 +259,7 @@ class MBTPAreaEstimator:
         
         total_area = 0.0
         for tri in triangles:
-            area = self.compute_triangle_area(tri, depth_map, fx, fy, ground_ref)
+            area = self.compute_triangle_area(tri, depth_map, fx, fy, cx, cy, ground_ref)
             total_area += area
         
         # Compute convex hull and volume
