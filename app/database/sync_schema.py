@@ -21,6 +21,7 @@ from app.database.session import Base
 import app.models.admin  # noqa: F401
 import app.models.calibration  # noqa: F401
 import app.models.organisation  # noqa: F401
+import app.models.pipeline  # noqa: F401
 import app.models.report  # noqa: F401
 import app.models.survey  # noqa: F401
 
@@ -30,6 +31,7 @@ _REGISTERED_MODELS = (
     app.models.organisation,
     app.models.admin,
     app.models.report,
+    app.models.pipeline,
 )
 
 logger = logging.getLogger(__name__)

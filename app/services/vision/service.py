@@ -275,16 +275,19 @@ class VisionAnalysisService:
     }
 
     # Mapping from YOLO class to Ghana Manual 2023 distress types (matching fusion_service weights)
+    # RMM Table 3 distinguishes Corrugation (gravel §6.5.5) from Shoving (bituminous §6.2.12)
+    # Subgrade Failure (YOLO class 8) maps to Potholes - wide pothole with lower depth per RMM
+    # Crack class cannot distinguish Alligator/Longitudinal/Transverse - default to Longitudinal
     YOLO_TO_GHANA = {
         0: "Bleeding/Flushing",      # Bleeding
-        1: "Corrugation/Shoving",    # Corrugation
-        2: "Longitudinal Cracking",  # Crack (default to longitudinal, can be refined)
+        1: "Corrugation",            # Corrugation (gravel road distress per RMM)
+        2: "Longitudinal Cracking",  # Crack (cannot distinguish Alligator/Longitudinal/Transverse)
         3: "Patching",               # Patching
         4: "Potholes",               # Pothole
         5: "Ravelling",              # Ravelling (Weathering and Ravelling)
         6: "Rutting",                # Rutting
-        7: "Corrugation/Shoving",    # Shoving
-        8: "Subgrade Failure",       # Subgrade Failure
+        7: "Shoving",                # Shoving (bituminous road distress per RMM)
+        8: "Potholes",               # Subgrade Failure → mapped to Potholes (wide pothole, lower depth)
     }
 
     ASTM_PAPER_CLASSES = {0, 1, 2, 3}

@@ -28,6 +28,7 @@ from app.core.config import (
     ASTM_PCI_DISABLED_REASON,
     ASTM_PCI_ENABLED,
     ASTM_QCM_IRI_ENABLED,
+    MAX_UPLOAD_BYTES,
 )
 from app.core.logger import get_pipeline_logger, iri_logger
 from app.core.security import get_principal
@@ -41,7 +42,8 @@ from app.models.survey import (
     TrackedDefect,
 )
 from app.services.inertial import InertialRefineryService
-from app.services.pipeline.heavy_compute import run_heavy_pipeline
+from app.services.pipeline.queue import enqueue_pipeline_task
+from app.models.pipeline import PipelineTask
 
 router = APIRouter(prefix="/api/analysis", tags=["Modular Road Analysis Engine"])
 logger = logging.getLogger("roadessy.analysis")
@@ -920,8 +922,15 @@ async def get_run_summary(run_id: str, db: Session = Depends(get_db)):
                         "run_title": run.name,
                         "start_chainage_m": seg.segment_start_m,
                         "end_chainage_m": seg.segment_end_m,
-                        "roughness_value": seg.iri_value or seg.simple_iri or seg.astm_qcm_iri or 0,
-                        "avg_speed_mps": 0,
+                        "roughness_value": next(
+                            (
+                                value
+                                for value in (seg.iri_value, seg.simple_iri, seg.astm_qcm_iri)
+                                if value is not None and float(value) > 0
+                            ),
+                            None,
+                        ),
+                        "avg_speed_mps": None,
                         "quality_flags": {
                             "road_condition": seg.classification,
                         }
@@ -1146,6 +1155,43 @@ async def get_run_map_matching(run_id: str, db: Session = Depends(get_db)):
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content=_map_matching_payload(record),
+    )
+
+
+@router.get("/tasks/{task_id}", response_class=JSONResponse)
+async def get_pipeline_task(task_id: str, db: Session = Depends(get_db)):
+    """Return the state of one queued pipeline task."""
+    try:
+        tid = uuid.UUID(task_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid task_id UUID",
+        )
+
+    task = db.query(PipelineTask).filter(PipelineTask.id == tid).first()
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline task not found"
+        )
+
+    def _iso(value):
+        return value.isoformat() if value is not None else None
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "task_id": str(task.id),
+            "run_id": str(task.run_id),
+            "status": task.status,
+            "attempts": task.attempts,
+            "worker_id": task.worker_id,
+            "created_at": _iso(task.created_at),
+            "started_at": _iso(task.started_at),
+            "finished_at": _iso(task.finished_at),
+            "heartbeat_at": _iso(task.heartbeat_at),
+            "error": task.error,
+        },
     )
 
 
@@ -1630,51 +1676,75 @@ def _parse_calibration_metadata(raw: Optional[str]) -> Dict[str, Any]:
 # -------------------------------------------------------------------------
 @router.post("/process", response_class=JSONResponse)
 async def process_full_survey(
-    user_id: str = Form(..., description="ID of the user running the survey"),
-    organisation_id: str = Form(..., description="Organization identifier"),
-    name: str = Form(..., description="Descriptive name for the survey run"),
-    matched_road_id: Optional[str] = Form(None, description="Optional road centerline ID to match against"),
-    road_id: Optional[str] = Form(None, description="UUID of the roads.id row this survey belongs to"),
-    project_id: Optional[str] = Form(None, description="UUID of the projects.id row this survey belongs to"),
-    # Road creation fields (if creating new road inline)
-    road_name: Optional[str] = Form(None, description="Road name for inline creation"),
-    road_start_node: Optional[str] = Form(None, description="Road start node for inline creation"),
-    road_end_node: Optional[str] = Form(None, description="Road end node for inline creation"),
-    road_surface_type: Optional[str] = Form(None, description="Road surface type for inline creation"),
-    road_description: Optional[str] = Form(None, description="Road description for inline creation"),
-    video: UploadFile = File(..., description="Forward-facing dashcam video stream (.mp4)"),
-    gps: Optional[UploadFile] = File(None, description="GPS telemetry log (.csv or .gpx)"),
-    gps_source: Optional[str] = Form(
-        "auto",
-        description=(
-            "Which recording the route is taken from: 'auto' (uploaded GPS file, "
-            "else the vibration log), 'overlay' to read the position burned into "
-            "the video, or 'video' for the container's own metadata."
-        ),
-    ),
-    vibration: UploadFile = File(..., description="High-frequency accelerometer log (.csv)"),
-    calibration_metadata_json: Optional[str] = Form(None, description="Stringified camera calibration metadata JSON"),
-    calibration_profile_id: Optional[int] = Form(None, description="Stored calibration_profiles.id to use for this run"),
-    use_overlay_clock: Optional[bool] = Form(
-        False,
-        description=(
-            "Take each frame's time from the date-time burned into the video "
-            "instead of dividing the GPS span by the frame count. Slower, but it "
-            "is the only option that can see frames missing from the middle of "
-            "a run. Falls back automatically when the overlay is unreadable."
-        ),
-    ),
+    request: Request,
     db: Session = Depends(get_db),
     principal: dict = Depends(get_principal),
 ):
     """
-    Executes the complete Roadessy survey pipeline with TWO pipelines:
+    Queues the complete Roadessy survey pipeline for the worker process:
     Pipeline 1: ASTM (QCM IRI @ 100Hz + MDPI Vision + ASTM PCI)
     Pipeline 2: Roadessy (Simple IRI + Ghana Manual Table 3 Vision -> Roadessy PCI)
 
-    Ownership is taken from the verified Clerk session when one is present; the
-    form fields are only trusted for anonymous development callers.
+    The upload is persisted and a task is enqueued; the heavy compute
+    runs in the standalone worker, so this request returns 202 once the
+    files are saved. Ownership is taken from the verified Clerk session
+    when one is present; the form fields are only trusted for anonymous
+    development callers.
     """
+    # Parse multipart form with increased max_part_size from config to support large video files
+    logger.info(f"Parsing multipart form with max_part_size={MAX_UPLOAD_BYTES}")
+    try:
+        form = await request.form(max_part_size=MAX_UPLOAD_BYTES, max_files=10, max_fields=20)
+        logger.info("Form parsed successfully")
+    except Exception as e:
+        logger.exception(f"Failed to parse multipart form: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to parse form: {e}")
+
+    user_id = form.get("user_id")
+    organisation_id = form.get("organisation_id")
+    name = form.get("name")
+    matched_road_id = form.get("matched_road_id")
+    road_id = form.get("road_id")
+    project_id = form.get("project_id")
+    road_name = form.get("road_name")
+    road_start_node = form.get("road_start_node")
+    road_end_node = form.get("road_end_node")
+    road_surface_type = form.get("road_surface_type")
+    road_description = form.get("road_description")
+    gps_source = form.get("gps_source", "auto")
+    calibration_metadata_json = form.get("calibration_metadata_json")
+    calibration_profile_id_str = form.get("calibration_profile_id")
+    calibration_profile_id = int(calibration_profile_id_str) if calibration_profile_id_str else None
+    use_overlay_clock = form.get("use_overlay_clock", "false").lower() == "true"
+
+    video: UploadFile = form.get("video")
+    gps: UploadFile = form.get("gps")
+    vibration: UploadFile = form.get("vibration")
+
+    logger.info(
+        "Form fields: user_id=%s organisation_id=%s name=%s project_id=%s "
+        "road_id=%s matched_road_id=%s road_name=%s calibration_profile_id=%s "
+        "has_video=%s has_vibration=%s has_gps=%s calibration_metadata_json=%s",
+        form.get("user_id"), form.get("organisation_id"), form.get("name"),
+        form.get("project_id"), form.get("road_id"), form.get("matched_road_id"),
+        form.get("road_name"), form.get("calibration_profile_id"),
+        bool(video and video.filename),
+        bool(vibration and vibration.filename),
+        bool(gps and gps.filename),
+        bool(calibration_metadata_json),
+    )
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'user_id' field")
+    if not organisation_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'organisation_id' field")
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'name' field")
+    if not video or not video.filename:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Video file is required (field: video)")
+    if not vibration or not vibration.filename:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vibration file is required (field: vibration)")
+
     resolved_user_id, resolved_org_id = _resolve_ownership(principal, user_id, organisation_id)
 
     run_id = uuid.uuid4()
@@ -1682,8 +1752,13 @@ async def process_full_survey(
     os.makedirs(scratch_dir, exist_ok=True)
 
     vid_path = os.path.join(scratch_dir, "video.mp4")
-    gps_path = os.path.join(scratch_dir, "gps.csv")
+    gps_path = os.path.join(scratch_dir, "gps.csv") if gps and gps.filename else None
     vib_path = os.path.join(scratch_dir, "vibrations.csv")
+
+    # Flipped to True once a pipeline task has been enqueued, so the
+    # request's finally block leaves the uploaded inputs in place for
+    # the worker to consume.
+    task_enqueued = False
 
     try:
         # Save uploaded files locally to workspace directory
@@ -1753,53 +1828,71 @@ async def process_full_survey(
             db.commit()
             created_road_id = str(new_road.id)
 
-        # Run the heavy compute pipeline (2 pipelines)
-        result = run_heavy_pipeline(
-            vibration_file_path=vib_path,
-            gps_file_path=gps_path,
-            video_path=vid_path,
-            road_id=matched_road_id,
-            camera_profile_id=calibration_profile_id,
-            run_id=str(run_id),
-            user_id=resolved_user_id,
-            organisation_id=resolved_org_id,
-            run_name=name.strip() or None,
-            project_id=project_id,
-            road_uuid=created_road_id,
-            camera_overrides=camera_overrides,
-            use_overlay_clock=bool(use_overlay_clock),
-            gps_source=(gps_source or "auto"),
+        # The heavy pipeline runs in a standalone worker process that
+        # claims queued tasks from the database, so this request returns
+        # immediately and the survey survives an API restart. The worker
+        # owns the scratch directory until the pipeline has consumed the
+        # inputs.
+        task = enqueue_pipeline_task(
+            db,
+            run_id=run_id,
+            payload=dict(
+                vibration_file_path=vib_path,
+                gps_file_path=gps_path,
+                video_path=vid_path,
+                road_id=matched_road_id,
+                camera_profile_id=calibration_profile_id,
+                run_id=str(run_id),
+                user_id=resolved_user_id,
+                organisation_id=resolved_org_id,
+                run_name=name.strip() or None,
+                project_id=project_id,
+                road_uuid=created_road_id,
+                camera_overrides=camera_overrides,
+                use_overlay_clock=bool(use_overlay_clock),
+                gps_source=(gps_source or "auto"),
+            ),
         )
+        task_enqueued = True
 
         return JSONResponse(
-            status_code=status.HTTP_200_OK,
+            status_code=status.HTTP_202_ACCEPTED,
             content={
-                "status": "success",
+                "status": "queued",
                 "run_id": str(run_id),
-                "output_dir": result.get("output_dir"),
-                "pipeline_1_astm": result.get("pipeline_1_astm"),
-                "pipeline_2_roadessy": result.get("pipeline_2_roadessy"),
-                "map_matching": result.get("map_matching"),
-                "total_distance_m": result.get("total_distance_m"),
-                "defects_detected": result.get("defects_detected"),
-                "video_quality": result.get("video_quality"),
+                "task_id": str(task.id),
+                "output_dir": str(OUTPUT_BASE_DIR / str(run_id)),
+                "message": (
+                    "Pipeline queued; a worker process will run it. "
+                    "Poll the runs list for results."
+                ),
             },
         )
 
-    except HTTPException:
+    except HTTPException as http_exc:
         # Raised above for a missing project, a missing project_id or a taken
         # road name. Re-wrapping these as a 500 hides a message the person needs
         # to see, which is why the frontend surfaces the detail verbatim.
         db.rollback()
+        logger.warning(
+            "Survey upload rejected for run_id=%s with status=%s detail=%s",
+            run_id, http_exc.status_code, http_exc.detail,
+        )
         raise
     except Exception as exc:
         db.rollback()
+        logger.exception(
+            f"Survey processing analysis failed for run_id={run_id}: {exc}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Survey processing analysis failed: {str(exc)}",
         )
     finally:
-        if os.path.exists(scratch_dir):
+        # The worker removes the scratch directory once the pipeline
+        # has consumed the inputs, so the request only cleans up here
+        # when no task was enqueued.
+        if not task_enqueued and os.path.exists(scratch_dir):
             shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
@@ -1956,8 +2049,13 @@ async def process_batch_surveys_with_files(
     import json as json_lib
     from starlette.datastructures import FormData
     
-    # Parse multipart form data
-    form_data: FormData = await request.form()
+    # Parse multipart form data. The default part size is 1 MB, which
+    # would reject every real survey video, so the same upload bound
+    # /process uses is applied here too. Ten surveys can carry three
+    # files each (video, vibration, GPS), so 30 file parts are allowed.
+    form_data: FormData = await request.form(
+        max_part_size=MAX_UPLOAD_BYTES, max_files=30, max_fields=20
+    )
     
     batch_config = form_data.get("batch_config")
     if not batch_config:
@@ -1986,10 +2084,10 @@ async def process_batch_surveys_with_files(
             detail="At least one survey is required",
         )
     
-    if len(survey_list) > 5:
+    if len(survey_list) > 10:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Maximum 5 surveys per batch with file uploads",
+            detail="Maximum 10 surveys per batch with file uploads",
         )
     
     resolved_user_id = principal.get("user_id") or "operator_default"
@@ -2072,28 +2170,38 @@ async def process_batch_surveys_with_files(
                     detail=f"Survey {idx}: Failed to save uploaded files: {exc}",
                 )
             
-            # Process through heavy pipeline
+            # Queue the survey for the worker process. The pipeline can
+            # run for hours, so it must not hold this request open, and
+            # the scratch directory stays on disk until the worker has
+            # consumed the uploaded inputs.
             try:
-                result = run_heavy_pipeline(
-                    vibration_file_path=vib_path,
-                    gps_file_path=gps_path,
-                    video_path=vid_path,
-                    road_id=matched_road_id,
-                    camera_profile_id=calibration_profile_id,
-                    run_id=str(run_id),
-                    user_id=resolved_user_id,
-                    organisation_id=project_org_id,
-                    run_name=name.strip() or None,
-                    project_id=project_id,
-                    road_uuid=road_id,
-                    camera_overrides=_parse_calibration_overrides(calibration_metadata_json),
-                    use_overlay_clock=bool(use_overlay_clock),
-                    gps_source=(gps_source or "auto"),
+                task = enqueue_pipeline_task(
+                    db,
+                    run_id=run_id,
+                    payload=dict(
+                        vibration_file_path=vib_path,
+                        gps_file_path=gps_path,
+                        video_path=vid_path,
+                        road_id=matched_road_id,
+                        camera_profile_id=calibration_profile_id,
+                        run_id=str(run_id),
+                        user_id=resolved_user_id,
+                        organisation_id=project_org_id,
+                        run_name=name.strip() or None,
+                        project_id=project_id,
+                        road_uuid=road_id,
+                        camera_overrides=_parse_calibration_overrides(
+                            calibration_metadata_json
+                        ),
+                        use_overlay_clock=bool(use_overlay_clock),
+                        gps_source=(gps_source or "auto"),
+                    ),
                 )
-                
+
                 results.append({
                     "index": idx,
                     "run_id": str(run_id),
+                    "task_id": str(task.id),
                     "name": name,
                     "project_id": project_id,
                     "road_id": road_id,
@@ -2103,29 +2211,22 @@ async def process_batch_surveys_with_files(
                     "org_id": project_org_id,
                     "shared_with_team_ids": shared_with_team_ids,
                     "shared_with_org_ids": shared_with_org_ids,
-                    "status": "completed",
-                    "output_dir": result.get("output_dir"),
-                    "pipeline_1_astm": result.get("pipeline_1_astm"),
-                    "pipeline_2_roadessy": result.get("pipeline_2_roadessy"),
-                    "map_matching": result.get("map_matching"),
-                    "total_distance_m": result.get("total_distance_m"),
-                    "defects_detected": result.get("defects_detected"),
-                    "video_quality": result.get("video_quality"),
+                    "status": "queued",
+                    "output_dir": str(OUTPUT_BASE_DIR / str(run_id)),
                 })
-                
+
             except Exception as exc:
+                db.rollback()
+                if os.path.exists(scratch_dir):
+                    shutil.rmtree(scratch_dir, ignore_errors=True)
                 results.append({
                     "index": idx,
                     "run_id": str(run_id),
                     "name": name,
                     "project_id": project_id,
                     "status": "failed",
-                    "error": f"Pipeline processing failed: {str(exc)}",
+                    "error": f"Failed to queue survey: {str(exc)}",
                 })
-            finally:
-                # Clean up scratch directory
-                if os.path.exists(scratch_dir):
-                    shutil.rmtree(scratch_dir, ignore_errors=True)
             
         except HTTPException:
             raise
@@ -2139,12 +2240,16 @@ async def process_batch_surveys_with_files(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
-            "status": "batch_completed",
+            "status": "batch_queued",
             "total_surveys": len(survey_list),
-            "successful": len([r for r in results if r.get("status") == "completed"]),
+            "successful": len([r for r in results if r.get("status") == "queued"]),
             "failed": len([r for r in results if r.get("status") == "failed"]) + len(errors),
             "results": results,
             "errors": errors,
+            "message": (
+                "All surveys queued; a worker process will run them. "
+                "Poll the runs list for results."
+            ),
         },
     )
 

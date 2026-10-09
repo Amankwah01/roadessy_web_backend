@@ -100,6 +100,9 @@ def output_base_dir() -> "os.PathLike[str]":
 #: Publish the D6433-derived PCI. Default off; see the note above.
 ASTM_PCI_ENABLED = _env_flag("ASTM_PCI_ENABLED", False)
 
+#: Maximum upload size in bytes (default 5GB)
+MAX_UPLOAD_BYTES = int(os.getenv("ROADESSY_MAX_UPLOAD_BYTES", str(5 * 1024 * 1024 * 1024)))
+
 #: Publish the ASTM QCM IRI. Off by default too; see the note above. Sound
 #: calculation, but it belongs to a track whose PCI half is withheld, and it is
 #: the most expensive step in the inertial path.

@@ -47,17 +47,19 @@ class PavementConditionFusioneer:
     }
 
     # Ghana Manual Table 3 rating weights per distress type
+    # Updated to match the 9 YOLO classes we can actually detect
+    # RMM Table 3: Corrugation (gravel §6.5.5) and Shoving (bituminous §6.2.12) are separate
+    # Subgrade Failure maps to Potholes - wide pothole with lower depth per RMM
+    # Alligator Cracking (0.9) and Transverse Cracking (0.5) not detectable with current model
     _GHANA_DISTRESS_WEIGHTS = {
         "Potholes": 1.0,
-        "Alligator Cracking": 0.9,
         "Rutting": 0.8,
         "Patching": 0.7,
+        "Shoving": 0.7,
+        "Corrugation": 0.6,        # Gravel distress, lower weight for bituminous
         "Ravelling": 0.6,
         "Longitudinal Cracking": 0.5,
-        "Transverse Cracking": 0.5,
         "Bleeding/Flushing": 0.4,
-        "Corrugation/Shoving": 0.7,
-        "Subgrade Failure": 1.0,
     }
 
     # PCI Classification (7-class system per Ghana Manual / ASTM D6433)
@@ -194,29 +196,73 @@ class PavementConditionFusioneer:
         Roadessy approach (Ghana Manual 2023 aligned):
         - PCI = 100 - corrected(DV_sum) from defects only
         - IRI reported separately
+        - Potholes use Table 4: 4-Level Pothole Rating (area per km) instead of Table 3 1-9 matrix
         """
         # Aggregate Ghana ratings by distress type
         distress_ratings = {}
+        pothole_areas = []  # Collect pothole areas for Table 4 rating
+        survey_length_km = 0.0
+        
+        # Calculate survey length from segments
+        if simple_segments:
+            survey_length_km = max(s.end_distance_m for s in simple_segments) / 1000.0
+        
         for det in roadessy_vision.detections:
             ghana_type = det.get("ghana_distress_type", "Unknown")
-            rating = det.get("ghana_rating_1to9", 1)
+            
+            # Special handling for potholes: use Table 4 (area per km)
+            if ghana_type == "Potholes":
+                area_m2 = det.get("area", 0.0)
+                if area_m2 > 0:
+                    pothole_areas.append(area_m2)
+                # Still collect the 1-9 rating for other uses, but we'll override
+                rating = det.get("ghana_rating_1to9", 1)
+            else:
+                rating = det.get("ghana_rating_1to9", 1)
+            
             weight = cls._GHANA_DISTRESS_WEIGHTS.get(ghana_type, 0.5)
             if ghana_type not in distress_ratings:
                 distress_ratings[ghana_type] = {"ratings": [], "weight": weight}
             distress_ratings[ghana_type]["ratings"].append(rating)
         
+        # Compute Table 4 pothole rating from total area per km
+        pothole_rating_1to4 = 1
+        pothole_area_per_km = 0.0
+        if pothole_areas and survey_length_km > 0:
+            total_pothole_area = sum(pothole_areas)
+            pothole_area_per_km = total_pothole_area / survey_length_km
+            if pothole_area_per_km > 50:
+                pothole_rating_1to4 = 4
+            elif pothole_area_per_km > 30:
+                pothole_rating_1to4 = 3
+            elif pothole_area_per_km > 10:
+                pothole_rating_1to4 = 2
+            else:
+                pothole_rating_1to4 = 1
+        
         # Compute weighted DV sum
         dv_sum = 0.0
         rating_details = {}
         for distress_type, info in distress_ratings.items():
-            avg_rating = np.mean(info["ratings"]) if info["ratings"] else 1
-            weight = info["weight"]
-            dv_sum += avg_rating * weight
-            rating_details[distress_type] = {
-                "avg_rating_1to9": round(avg_rating, 1),
-                "weight": weight,
-                "contribution": round(avg_rating * weight, 2)
-            }
+            if distress_type == "Potholes":
+                # Use Table 4 rating (1-4) converted to 1-9 scale for DV calculation
+                # Map: 1->2, 2->4, 3->6, 4->8 (spread across moderate/extreme)
+                avg_rating = pothole_rating_1to4 * 2
+                rating_details[distress_type] = {
+                    "avg_rating_1to9": avg_rating,
+                    "weight": info["weight"],
+                    "contribution": round(avg_rating * info["weight"], 2),
+                    "pothole_area_per_km": round(pothole_area_per_km, 2),
+                    "pothole_table4_level": pothole_rating_1to4,
+                }
+            else:
+                avg_rating = np.mean(info["ratings"]) if info["ratings"] else 1
+                rating_details[distress_type] = {
+                    "avg_rating_1to9": round(avg_rating, 1),
+                    "weight": info["weight"],
+                    "contribution": round(avg_rating * info["weight"], 2)
+                }
+            dv_sum += avg_rating * info["weight"]
         
         # Roadessy: PCI from defects only, IRI separate
         # Correction factor per Ghana Manual 2023 RMM methodology

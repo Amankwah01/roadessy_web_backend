@@ -60,11 +60,11 @@ class RobustPotholeSegmentor:
         x1, y1, x2, y2 = bbox
         h, w = depth_map.shape
         
-        # Ensure bbox within bounds
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(w - 1, x2)
-        y2 = min(h - 1, y2)
+        # Ensure bbox within bounds and integral (YOLO boxes are floats)
+        x1 = max(0, int(round(x1)))
+        y1 = max(0, int(round(y1)))
+        x2 = min(w - 1, int(round(x2)))
+        y2 = min(h - 1, int(round(y2)))
         
         if x1 >= x2 or y1 >= y2:
             return None, "invalid_bbox"

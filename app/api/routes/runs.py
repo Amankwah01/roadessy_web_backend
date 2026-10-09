@@ -14,6 +14,7 @@ being spread across the pipeline's routes.
 
 import html
 import logging
+import math
 import os
 import uuid
 from datetime import datetime, timezone
@@ -23,12 +24,12 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.core.config import ASTM_PCI_DISABLED_REASON, ASTM_PCI_ENABLED
 from app.database.session import get_db
-from app.models.survey import IRISegment, SurveyRun, TrackedDefect
+from app.models.survey import IRISegment, MapMatchingRun, PCISegment, Project, Road, SurveyRun, TrackedDefect
 from app.services.astm import ASTMD6433PCI
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,63 @@ def _parse_uuid(value: str, label: str):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid {label} UUID"
         )
+
+
+def _run_distance_m(db: Session, run_uuid, trajectory) -> Optional[float]:
+    """Use segment chainage first, then map matching, then GPS geometry."""
+    segment_end = (
+        db.query(func.max(IRISegment.segment_end_m))
+        .filter(IRISegment.run_id == run_uuid)
+        .scalar()
+    )
+    if segment_end is not None and float(segment_end) > 0:
+        return float(segment_end)
+
+    matching = db.query(MapMatchingRun).filter(MapMatchingRun.run_id == run_uuid).first()
+    if matching:
+        matched_distance = next(
+            (
+                distance
+                for distance in (matching.matched_distance_m, matching.road_length_m)
+                if distance is not None and float(distance) > 0
+            ),
+            None,
+        )
+        if matched_distance is not None and float(matched_distance) > 0:
+            return float(matched_distance)
+
+    if not trajectory:
+        return None
+    try:
+        from shapely import wkb as shapely_wkb
+        from shapely import wkt as shapely_wkt
+
+        geometry_data = getattr(trajectory, "data", trajectory)
+        geometry = (
+            shapely_wkb.loads(bytes(geometry_data))
+            if isinstance(geometry_data, (bytes, bytearray, memoryview))
+            else shapely_wkt.loads(str(geometry_data))
+        )
+        lines = [geometry] if geometry.geom_type == "LineString" else list(geometry.geoms)
+        length_m = 0.0
+        for line in lines:
+            coordinates = list(line.coords)
+            for start, end in zip(coordinates, coordinates[1:]):
+                lon1, lat1 = map(math.radians, (float(start[0]), float(start[1])))
+                lon2, lat2 = map(math.radians, (float(end[0]), float(end[1])))
+                lat_delta = lat2 - lat1
+                lon_delta = lon2 - lon1
+                haversine = (
+                    math.sin(lat_delta / 2) ** 2
+                    + math.cos(lat1) * math.cos(lat2) * math.sin(lon_delta / 2) ** 2
+                )
+                length_m += 6_371_000 * 2 * math.atan2(
+                    math.sqrt(haversine), math.sqrt(1 - haversine)
+                )
+        return length_m if length_m > 0 else None
+    except Exception:
+        logger.warning("Could not calculate run distance from trajectory", exc_info=True)
+        return None
 
 
 def _wkt_to_point(wkt: Optional[str]):
@@ -97,9 +155,18 @@ def _roughness_feature_collection(db: Session, run_uuid, run_title: str) -> Dict
     line = []
     if run is not None and run.geom_trajectory is not None:
         try:
+            from shapely import wkb as shapely_wkb
             from shapely import wkt as shapely_wkt
 
-            line = list(shapely_wkt.loads(run.geom_trajectory).coords)
+            geom = run.geom_trajectory
+            if hasattr(geom, "data"):
+                shape = shapely_wkb.loads(bytes(geom.data))
+            elif isinstance(geom, str):
+                shape = shapely_wkt.loads(geom)
+            else:
+                shape = None
+            if shape is not None:
+                line = list(shape.coords)
         except Exception:
             logger.warning("Could not read run trajectory for roughness geometry", exc_info=True)
             line = []
@@ -129,15 +196,24 @@ def _roughness_feature_collection(db: Session, run_uuid, run_title: str) -> Dict
                 "properties": {
                     "run_id": str(run_uuid),
                     "run_title": run_title,
+                    "start_chainage_m": start,
+                    "end_chainage_m": end,
                     "segment_start_m": start,
                     "segment_end_m": end,
                     "iri": float(segment.iri_value),
+                    # The map and the run-detail IRI bars read roughness_value;
+                    # the dashboard's map endpoint publishes simple_iri here.
+                    "roughness_value": segment.simple_iri,
                     "simple_iri": segment.simple_iri,
                     "astm_qcm_iri": segment.astm_qcm_iri,
                     "astm_pci_segment": segment.astm_pci_segment,
                     "roadessy_pci_segment": segment.roadessy_pci_segment,
                     "classification": segment.classification,
-                },
+                    "avg_speed_mps": None,
+                    "quality_flags": {
+                        "road_condition": segment.classification,
+                    },
+                }
             }
         )
     return {"type": "FeatureCollection", "features": features}
@@ -415,6 +491,76 @@ def _centroid_of_linestring(wkt: Optional[str]):
         return None
 
 
+def _road_geometry_payload(db: Session, run_uuid) -> Optional[Dict[str, Any]]:
+    """Get the matched road geometry for the whole road."""
+    from app.models.survey import MapMatchingRun, SurveyRun
+    from shapely import wkb as shapely_wkb
+    from shapely import wkt as shapely_wkt
+    
+    mm = db.query(MapMatchingRun).filter(MapMatchingRun.run_id == run_uuid).first()
+    if mm and mm.centerline_geojson:
+        return mm.centerline_geojson
+    # Fallback to run trajectory if no map matching
+    run = db.query(SurveyRun).filter(SurveyRun.run_id == run_uuid).first()
+    if run and run.geom_trajectory:
+        try:
+            geometry_data = getattr(run.geom_trajectory, "data", run.geom_trajectory)
+            geom = (
+                shapely_wkb.loads(bytes(geometry_data))
+                if isinstance(geometry_data, (bytes, bytearray, memoryview))
+                else shapely_wkt.loads(str(geometry_data))
+            )
+            if geom.geom_type == "LineString":
+                coords = list(geom.coords)
+                if coords:
+                    return {
+                        "type": "LineString",
+                        "coordinates": [[float(lon), float(lat)] for lon, lat in coords]
+                    }
+        except Exception:
+            logger.warning("Could not read trajectory geometry for run %s", run_uuid, exc_info=True)
+    return None
+
+
+def _segment_charts_payload(db: Session, run_uuid) -> Dict[str, Any]:
+    """Get IRI and PCI segment data for charts and popup maps."""
+    # IRI segments (from IRISegment table)
+    iri_segs = db.query(IRISegment).filter(IRISegment.run_id == run_uuid).order_by(IRISegment.segment_start_m).all()
+
+    # PCI segments (from PCISegment table)
+    pci_segs = db.query(PCISegment).filter(PCISegment.run_id == run_uuid).order_by(PCISegment.segment_start_m).all()
+
+    # Build segment data for charts
+    iri_chart_data = []
+    for seg in iri_segs:
+        iri_chart_data.append({
+            "segment_index": seg.id,
+            "start_m": float(seg.segment_start_m),
+            "end_m": float(seg.segment_end_m),
+            "simple_iri": float(seg.simple_iri) if seg.simple_iri is not None else None,
+            "astm_qcm_iri": float(seg.astm_qcm_iri) if seg.astm_qcm_iri is not None else None,
+            "classification": seg.classification or "Unrated",
+        })
+
+    pci_chart_data = []
+    for seg in pci_segs:
+        pci_chart_data.append({
+            "segment_index": seg.id,
+            "start_m": float(seg.segment_start_m),
+            "end_m": float(seg.segment_end_m),
+            "roadessy_pci": float(seg.roadessy_pci) if seg.roadessy_pci is not None else None,
+            "astm_pci": float(seg.astm_pci) if seg.astm_pci is not None else None,
+            "roadessy_pci_class": seg.roadessy_pci_class or "Unrated",
+            "astm_pci_class": seg.astm_pci_class or "Unrated",
+            "deduct_value": float(seg.roadessy_deduct_value) if seg.roadessy_deduct_value is not None else None,
+        })
+
+    return {
+        "iri_chart": iri_chart_data,
+        "pci_chart": pci_chart_data,
+    }
+
+
 def _iri_segment_payloads(db: Session, run_uuid) -> list:
     """This run's 50 m segments, as the detail table reads them."""
     segments = (
@@ -423,8 +569,26 @@ def _iri_segment_payloads(db: Session, run_uuid) -> list:
         .order_by(IRISegment.segment_start_m)
         .all()
     )
-    return [
-        {
+    pci_segments = (
+        db.query(PCISegment)
+        .filter(PCISegment.run_id == run_uuid)
+        .all()
+    )
+    pci_by_iri_id = {
+        segment.iri_segment_id: segment
+        for segment in pci_segments
+        if segment.iri_segment_id is not None
+    }
+    pci_by_chainage = {
+        (round(segment.segment_start_m, 1), round(segment.segment_end_m, 1)): segment
+        for segment in pci_segments
+    }
+    payloads = []
+    for segment in segments:
+        pci_segment = pci_by_iri_id.get(segment.id) or pci_by_chainage.get(
+            (round(segment.segment_start_m, 1), round(segment.segment_end_m, 1))
+        )
+        payloads.append({
             "id": segment.id,
             "run_id": str(run_uuid),
             "road_id": segment.road_id,
@@ -433,15 +597,14 @@ def _iri_segment_payloads(db: Session, run_uuid) -> list:
             "iri_value": segment.iri_value,
             "simple_iri": segment.simple_iri,
             "astm_qcm_iri": segment.astm_qcm_iri,
-            "astm_pci_segment": segment.astm_pci_segment,
-            "roadessy_pci_segment": segment.roadessy_pci_segment,
+            "astm_pci_segment": pci_segment.astm_pci if pci_segment else None,
+            "roadessy_pci_segment": pci_segment.roadessy_pci if pci_segment else None,
             "classification": segment.classification,
             # Segments have no geometry of their own; the run's trajectory
             # placement is published separately as a FeatureCollection.
             "geom_location": None,
-        }
-        for segment in segments
-    ]
+        })
+    return payloads
 
 
 def _tracked_defect_payloads(db: Session, run_uuid) -> list:
@@ -531,15 +694,7 @@ async def get_run_detail(
     defect_count = (
         db.query(TrackedDefect).filter(TrackedDefect.run_id == run_uuid).count()
     )
-    distance_m = None
-    furthest = (
-        db.query(IRISegment)
-        .filter(IRISegment.run_id == run_uuid)
-        .order_by(IRISegment.segment_end_m.desc())
-        .first()
-    )
-    if furthest is not None:
-        distance_m = float(furthest.segment_end_m)
+    distance_m = _run_distance_m(db, run_uuid, run.geom_trajectory)
 
     created_at = run.created_at
     updated_at = run.created_at
@@ -599,6 +754,8 @@ async def get_run_detail(
         "iri_segments": _iri_segment_payloads(db, run_uuid),
         "tracked_defects": _tracked_defect_payloads(db, run_uuid),
         "map_matching": _map_matching_payload(db, run_uuid),
+        "road_geometry": _road_geometry_payload(db, run_uuid),
+        "segment_charts": _segment_charts_payload(db, run_uuid),
     }
 
     if inline_segments:
@@ -667,8 +824,7 @@ async def generate_run_report(
     report_path = run_dir / report_name
 
     defect_count = db.query(TrackedDefect).filter(TrackedDefect.run_id == run_uuid).count()
-    segments = db.query(IRISegment).filter(IRISegment.run_id == run_uuid).all()
-    distance_m = max((float(s.segment_end_m) for s in segments), default=0.0)
+    distance_m = _run_distance_m(db, run_uuid, run.geom_trajectory)
 
     def _row(label: str, value: Any) -> str:
         return f"<tr><th style='text-align:left;padding:4px 12px'>{label}</th><td style='padding:4px 12px'>{value if value is not None else '-'}</td></tr>"
@@ -678,7 +834,7 @@ async def generate_run_report(
             _row("Run", run.name),
             _row("Run ID", str(run_uuid)),
             _row("Created", run.created_at.isoformat() if run.created_at else None),
-            _row("Distance (m)", round(distance_m, 2)),
+            _row("Distance (m)", round(distance_m, 2) if distance_m is not None else None),
             _row(
                 "PCI (D6433-derived, provisional)",
                 round(run.astm_pci, 2)

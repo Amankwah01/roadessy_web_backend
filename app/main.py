@@ -1,4 +1,11 @@
 import os
+import tempfile
+
+# Set temp directory to F: drive to avoid C: drive space issues with large uploads
+os.environ["TEMP"] = r"F:\temp"
+os.environ["TMP"] = r"F:\temp"
+tempfile.tempdir = r"F:\temp"
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -67,4 +74,5 @@ app.include_router(me_router)
 @app.get("/health")
 async def health_check():
     """Unblocked endpoint for system monitoring."""
-    return {"status": "healthy"}
+    import tempfile
+    return {"status": "healthy", "tempdir": tempfile.gettempdir()}

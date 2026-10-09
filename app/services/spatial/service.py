@@ -552,64 +552,109 @@ class SpatialService:
             return None
 
     @staticmethod
-    def _find_nearest_road(db: Session, gps_df: pd.DataFrame, max_distance_m: float = ROAD_SELECTION_RADIUS_M) -> Optional[str]:
+    def _find_matched_roads(db: Session, gps_df: pd.DataFrame, max_distance_m: float = ROAD_SELECTION_RADIUS_M) -> List[Dict[str, Any]]:
+        """Find all roads the trajectory follows, ordered by chainage along the run.
+        
+        Returns a list of road segments with their geometries, chainage ranges,
+        and overlap lengths. This enables multi-road matching for long runs
+        that span multiple road segments (e.g., 6km runs across junctions).
+        """
         points = SpatialService._valid_gps_points(gps_df)
         trajectory = SpatialService._trajectory_geometry(points)
         if trajectory is None or trajectory.is_empty:
-            return None
+            return []
         trajectory_wkt = trajectory.wkt
 
         try:
-            result = db.execute(
+            results = db.execute(
                 text("""
                     WITH trajectory AS (
                         SELECT ST_SetSRID(ST_GeomFromText(:trajectory_wkt), 4326) AS geom
                     ),
                     buffered AS (
-                        -- Buffer in geography (metres), then drop back to plain
-                        -- geometry, because ST_Intersection is not defined for
-                        -- geography and the length has to come out in degrees.
                         SELECT ST_Buffer(geom::geography, :max_distance_m)::geometry AS geom
                         FROM trajectory
+                    ),
+                    road_intersections AS (
+                        SELECT 
+                            g.gid::VARCHAR AS road_id,
+                            ST_AsText(ST_SetSRID(g.geom, 4326)) AS centerline_wkt,
+                            ST_Length(ST_Intersection(g.geom, b.geom)::geography) AS overlap_m,
+                            ST_Length(g.geom::geography) AS road_length_m,
+                            ST_LineLocatePoint(
+                                ST_GeometryN(ST_LineMerge(g.geom), 1),
+                                ST_ClosestPoint(g.geom, ST_StartPoint(t.geom))
+                            ) AS start_fraction,
+                            ST_LineLocatePoint(
+                                ST_GeometryN(ST_LineMerge(g.geom), 1),
+                                ST_ClosestPoint(g.geom, ST_EndPoint(t.geom))
+                            ) AS end_fraction
+                        FROM gh_roads AS g
+                        CROSS JOIN buffered AS b
+                        CROSS JOIN trajectory AS t
+                        WHERE ST_DWithin(g.geom::geography, b.geom::geography, :max_distance_m)
+                          AND ST_Intersects(g.geom, b.geom)
                     )
-                    SELECT g.gid::VARCHAR AS road_id,
-                           ST_Length(ST_Intersection(g.geom, b.geom)::geography) AS overlap_m
-                    FROM gh_roads AS g
-                    CROSS JOIN buffered AS b
-                    WHERE ST_DWithin(g.geom::geography, b.geom::geography, :max_distance_m)
-                      AND ST_Intersects(g.geom, b.geom)
-                    -- Ranked by how much of the road the trajectory actually
-                    -- shares, not by the single closest approach. Ordering by
-                    -- ST_Distance picked whichever candidate merely brushed the
-                    -- track once: a parallel service road touching at a junction
-                    -- outranked the road the vehicle drove for hundreds of
-                    -- metres, and the run then matched a handful of points to
-                    -- it and still reported success.
-                    ORDER BY overlap_m DESC
-                    LIMIT 1
+                    SELECT road_id, centerline_wkt, overlap_m, road_length_m,
+                           LEAST(start_fraction, end_fraction) AS start_frac,
+                           GREATEST(start_fraction, end_fraction) AS end_frac
+                    FROM road_intersections
+                    WHERE overlap_m > 10.0  -- Minimum 10m overlap to count
+                    ORDER BY start_frac
                 """),
                 {
                     "trajectory_wkt": trajectory_wkt,
                     "max_distance_m": float(max_distance_m),
                 },
-            ).first()
-            if result and result[0]:
-                overlap_m = float(result[1]) if len(result) > 1 and result[1] is not None else 0.0
-                # DomainLogger.info takes the message first and then run_id, so a
-                # positional second argument lands in run_id and the %s is never
-                # substituted. That logged the road id as the run id. The road id
-                # is passed as a named field instead.
+            ).fetchall()
+            
+            matched_roads = []
+            for row in results:
+                road_id, centerline_wkt, overlap_m, road_length_m, start_frac, end_frac = row
+                centerline = SpatialService._normalise_centerline(wkt_loads(centerline_wkt))
+                if centerline is None:
+                    continue
+                # Length in metres straight from PostGIS geography; the
+                # WKT length would be degrees, not metres.
+                road_length = float(road_length_m) if road_length_m is not None else float(centerline.length)
+                # Convert fractions to chainage along road
+                road_start_chainage = start_frac * road_length
+                road_end_chainage = end_frac * road_length
+                
+                matched_roads.append({
+                    "road_id": str(road_id),
+                    "centerline_wkt": centerline_wkt,
+                    "overlap_m": float(overlap_m),
+                    "road_start_chainage": road_start_chainage,
+                    "road_end_chainage": road_end_chainage,
+                    "road_length_m": road_length,
+                })
+            
+            if matched_roads:
                 spatial_logger.info(
-                    f"Auto-matched trajectory to road_id={result[0]} "
-                    f"({overlap_m:.0f} m of shared centreline)",
-                    road_id=str(result[0]),
-                    overlap_m=round(overlap_m, 1),
+                    f"Auto-matched trajectory to {len(matched_roads)} road(s)",
+                    roads=[r["road_id"] for r in matched_roads],
+                    total_overlap=sum(r["overlap_m"] for r in matched_roads),
                 )
-                return str(result[0])
-            return None
+            
+            return matched_roads
         except Exception as exc:
-            spatial_logger.warning(f"Failed to auto-match road: {exc}")
-            return None
+            # A failed statement aborts the whole Postgres transaction, so
+            # the session must be rolled back before its caller can write
+            # anything (e.g. the map_matching_runs row). Without this the
+            # later persist fails with InFailedSqlTransaction.
+            db.rollback()
+            spatial_logger.warning(f"Failed to auto-match roads: {exc}")
+            return []
+
+    @staticmethod
+    def _find_nearest_road(db: Session, gps_df: pd.DataFrame, max_distance_m: float = ROAD_SELECTION_RADIUS_M) -> Optional[str]:
+        """Legacy single-road matching - returns the road with most overlap."""
+        roads = SpatialService._find_matched_roads(db, gps_df, max_distance_m)
+        if roads:
+            # Return the road with most overlap (original behavior)
+            return max(roads, key=lambda r: r["overlap_m"])["road_id"]
+        return None
 
     @staticmethod
     def _snap_to_centerline(points: Sequence[Tuple[float, float]], centerline_wkt: str, max_distance_m: float) -> Tuple[List[Dict[str, Any]], Any, float]:
@@ -677,6 +722,101 @@ class SpatialService:
             })
         return coords
 
+    @staticmethod
+    def _combine_road_centerlines(roads: List[Dict[str, Any]]) -> Optional[str]:
+        """Combine multiple road centerlines into a single continuous LineString.
+        
+        Roads are assumed to be ordered by their position along the trajectory.
+        Connects end of one road to start of next if they're close.
+        """
+        if not roads:
+            return None
+        if len(roads) == 1:
+            return roads[0]["centerline_wkt"]
+        
+        lines = []
+        for road in roads:
+            centerline = SpatialService._normalise_centerline(wkt_loads(road["centerline_wkt"]))
+            if centerline is not None:
+                lines.append(centerline)
+        
+        if not lines:
+            return None
+        
+        # Merge consecutive lines if they're close (within 50m)
+        merged = [lines[0]]
+        for line in lines[1:]:
+            last = merged[-1]
+            last_end = Point(last.coords[-1])
+            line_start = Point(line.coords[0])
+            distance = last_end.distance(line_start)
+            
+            # If close, connect them; otherwise add as separate
+            if distance < 0.0005:  # ~50m in degrees at equator
+                # Extend last line to include this one
+                combined_coords = list(last.coords) + list(line.coords)[1:]
+                merged[-1] = LineString(combined_coords)
+            else:
+                merged.append(line)
+        
+        if len(merged) == 1:
+            return merged[0].wkt
+        
+        # If still multiple disconnected lines, return the longest one
+        # (This handles cases where roads don't connect perfectly)
+        longest = max(merged, key=lambda l: l.length)
+        return longest.wkt
+
+    @classmethod
+    def _snap_to_multiroad_centerline(
+        cls,
+        points: Sequence[Tuple[float, float]],
+        roads: List[Dict[str, Any]],
+        max_distance_m: float,
+    ) -> Tuple[List[Dict[str, Any]], Any, float, List[Dict[str, Any]]]:
+        """Snap points to a combined multi-road centerline.
+        
+        Returns: (snapped_coords, combined_geometry, total_length, road_segments)
+        """
+        combined_wkt = cls._combine_road_centerlines(roads)
+        if not combined_wkt:
+            return [], None, 0.0, []
+        
+        centerline = cls._normalise_centerline(wkt_loads(combined_wkt))
+        if centerline is None:
+            return [], None, 0.0, []
+        
+        transformers = cls._metric_transformer(points)
+        if transformers is None:
+            return [], centerline, 0.0, []
+        forward, inverse = transformers
+
+        metric_centerline = transform(forward.transform, centerline)
+        total_length = float(metric_centerline.length)
+
+        lons, lats = zip(*points)
+        xs, ys = forward.transform(lons, lats)
+
+        snapped_coords = []
+        for index, (x, y, orig_lon, orig_lat) in enumerate(zip(xs, ys, lons, lats)):
+            metric_point = Point(x, y)
+            snapped_metric, _ = nearest_points(metric_centerline, metric_point)
+            distance_m = float(metric_point.distance(snapped_metric))
+            chainage_m = float(metric_centerline.project(snapped_metric))
+            snapped_lon, snapped_lat = inverse.transform(snapped_metric.x, snapped_metric.y)
+            snapped_coords.append({
+                "index": index,
+                "lat": float(snapped_lat),
+                "lon": float(snapped_lon),
+                "orig_lat": float(orig_lat),
+                "orig_lon": float(orig_lon),
+                "chainage_m": chainage_m,
+                "distance_m": distance_m,
+                "matched": distance_m <= max_distance_m,
+            })
+
+        return snapped_coords, centerline, total_length, roads
+
     @classmethod
     @monitor(stage="spatial_map_matching", domain="spatial")
     def map_match_trajectory(
@@ -723,6 +863,7 @@ class SpatialService:
 
         effective_road_id = str(road_id) if road_id else None
         resolved_centerline_wkt = centerline_wkt
+        matched_roads = []
         match_method = "provided" if effective_road_id else "auto"
         if db:
             if effective_road_id:
@@ -730,14 +871,28 @@ class SpatialService:
                 if resolved_centerline_wkt is None:
                     spatial_logger.warning(f"Provided road_id={effective_road_id} was not found in gh_roads")
             else:
-                effective_road_id = cls._find_nearest_road(db, gps_df, max_distance_m)
-                if effective_road_id:
-                    resolved_centerline_wkt = cls._get_road_centerline(db, effective_road_id)
+                # Multi-road matching: find all roads the trajectory follows
+                matched_roads = cls._find_matched_roads(db, gps_df, max_distance_m)
+                if matched_roads:
+                    effective_road_id = ",".join(r["road_id"] for r in matched_roads)
+                    match_method = "auto_multi"
         elif not resolved_centerline_wkt:
             match_method = "none"
 
-        if resolved_centerline_wkt:
+        # Use multi-road snapping if we have matched roads, otherwise single road
+        if matched_roads:
+            snapped_coords, centerline_geom, road_length_m, road_segments = cls._snap_to_multiroad_centerline(
+                all_points, matched_roads, max_distance_m
+            )
+            resolved_centerline_wkt = centerline_geom.wkt if centerline_geom else None
+        elif resolved_centerline_wkt:
             snapped_coords, centerline_geom, road_length_m = cls._snap_to_centerline(all_points, resolved_centerline_wkt, max_distance_m)
+            road_segments = [{"road_id": effective_road_id, "centerline_wkt": resolved_centerline_wkt}]
+        else:
+            snapped_coords, centerline_geom, road_length_m = [], None, 0.0
+            road_segments = []
+
+        if centerline_geom and snapped_coords:
             matched = [point for point in snapped_coords if point["matched"]]
             chainages = [point["chainage_m"] for point in matched]
             snapped_trajectory = LineString([(point["lon"], point["lat"]) for point in matched]) if len(matched) >= 2 else None
@@ -762,11 +917,29 @@ class SpatialService:
             # fixes.
             distances = [float(point["distance_m"]) for point in snapped_coords]
 
+            # Build road segment info for response
+            road_segments_info = []
+            transformers = cls._metric_transformer(all_points)
+            for seg in road_segments:
+                seg_centerline = cls._normalise_centerline(wkt_loads(seg["centerline_wkt"]))
+                if seg_centerline:
+                    if transformers is not None:
+                        seg_metric = transform(transformers[0].transform, seg_centerline)
+                        seg_length_m = float(seg_metric.length)
+                    else:
+                        seg_length_m = float(seg_centerline.length)
+                    road_segments_info.append({
+                        "road_id": seg["road_id"],
+                        "length_m": seg_length_m,
+                    })
+
             result = {
                 "matched_points": len(matched),
                 "total_points": total_points,
                 "unmatched_points": total_points - len(matched),
                 "matched_road_id": effective_road_id,
+                "matched_road_ids": [r["road_id"] for r in road_segments] if matched_roads else [effective_road_id] if effective_road_id else [],
+                "road_segments": road_segments_info,
                 "match_status": match_status,
                 "match_ratio": round(match_ratio, 4),
                 "match_method": match_method,
@@ -793,7 +966,7 @@ class SpatialService:
                 # positioned from it is suspect.
                 spatial_logger.warning(
                     f"Map matching is poor: only {len(matched)} of {judged_points} "
-                    f"points fell within {max_distance_m:.0f} m of road "
+                    f"points fell within {max_distance_m:.0f} m of road(s) "
                     f"{effective_road_id} (ratio {match_ratio:.2%}, need "
                     f"{cls.MIN_MATCH_RATIO:.0%}, median offset "
                     f"{result['median_distance_m']:.0f} m). Chainage and any "
@@ -821,6 +994,8 @@ class SpatialService:
             "total_points": total_points,
             "unmatched_points": total_points,
             "matched_road_id": effective_road_id,
+            "matched_road_ids": [r["road_id"] for r in road_segments] if matched_roads else [effective_road_id] if effective_road_id else [],
+            "road_segments": road_segments_info if matched_roads else [],
             "match_status": SpatialService.MATCH_NONE,
             "match_method": match_method,
             "centerline_wkt": None,

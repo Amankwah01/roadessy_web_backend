@@ -103,10 +103,10 @@ def check_oidc_configuration() -> bool:
 
 
 def _normalize_issuer(raw: str) -> str:
-    """Issuers are often configured without the trailing slash."""
+    """Issuers must match exactly what the token contains. Clerk uses no trailing slash."""
     if not raw:
         return ""
-    return raw if raw.endswith("/") else f"{raw}/"
+    return raw.rstrip("/")
 
 
 def get_jwks_keys(force_refresh: bool = False) -> Dict[str, Any]:

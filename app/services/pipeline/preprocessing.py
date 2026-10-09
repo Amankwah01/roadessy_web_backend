@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, List
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt
 
 from app.core.config import V_SPEED
 from app.core.logger import get_pipeline_logger, monitor
@@ -46,7 +45,7 @@ class PreprocessingPipeline:
     FS_HZ = 100.0           # Sampling frequency (Hz) - typical for phone sensors after upsampling
     SPEED_THRESHOLD_KMH = 5.0  # Minimum GPS speed (km/h)
     STATIONARY_THRESHOLD = 0.1  # Stationary threshold (g)
-    MAX_DISPLACEMENT_M = 5.0    # Max vertical displacement clip (m)
+    MAX_DISPLACEMENT_M = 2.0    # Max vertical displacement clip (m) — thesis treats >2 m as an outlier
     MAX_SPEED_KMH = 100.0       # Max reasonable GPS speed (km/h)
 
     @staticmethod
@@ -211,111 +210,54 @@ class PreprocessingPipeline:
     @staticmethod
     @monitor(stage="preprocessing_st5b_vertical_disp")
     def st5b_vertical_displacement(df: pd.DataFrame) -> pd.DataFrame:
-        """ST5b: Calculate vertical displacement using proper IRI filter sequence.
-        
-        Correct IRI filter sequence (per ASTM E1926 and QCM reference):
-        1. Remove mean from acceleration
-        2. Integrate acceleration -> velocity (cumulative sum)
-        3. High-pass filter velocity at 0.1 Hz (removes drift from integration)
-        4. Integrate velocity -> displacement (cumulative sum)
-        5. High-pass filter displacement at 0.1 Hz
-        6. Remove linear trend from displacement
-        7. Clip displacement > 5m
-        
-        This matches the QCM reference implementation in InertialRefineryService.
+        """ST5b: Calculate vertical displacement (Enochs thesis simple method).
+
+        Per the thesis (L348-351): integrate acceleration -> velocity ->
+        displacement with the trapezoidal rule, then treat |displacement|
+        beyond MAX_DISPLACEMENT_M as outliers. The thesis uses the simple
+        displacement method, NOT the ASTM E1926 quarter-car filter sequence,
+        so no high-pass filtering or detrending is applied here: those steps
+        oscillate the displacement and inflate the per-segment IRI.
         """
-        logger.info("ST5b: Computing vertical displacement via proper IRI filter sequence")
-        
+        logger.info("ST5b: Computing vertical displacement (thesis simple method)")
+
         if 'accel_z' not in df.columns or 'time_ms' not in df.columns:
             logger.warning("Required columns missing for displacement calculation")
             df['vertical_displacement'] = 0.0
             return df
-        
+
         accel = df['accel_z'].to_numpy()
         n = len(accel)
-        
+
         if n < 3:
             df['vertical_displacement'] = 0.0
             return df
-        
-        # 1. Remove mean from acceleration
+
+        # 1. Remove mean from acceleration (removes gravity/static bias)
         accel_corrected = accel - np.mean(accel)
-        
+
         # Time intervals in seconds
         dt = np.diff(df['time_ms'].to_numpy() / 1000.0)
         dt = np.insert(dt, 0, dt[0] if len(dt) > 0 else 0.01)
         dt = np.clip(dt, 0.001, 1.0)
-        
-        # Estimate sampling frequency for filter design
-        median_dt = float(np.median(dt))
-        if median_dt > 0:
-            fs = 1.0 / median_dt
-        else:
-            fs = 100.0
-        fs = float(np.clip(fs, 10.0, 200.0))
-        
-        # 2. Integrate acceleration -> velocity (cumulative sum)
+
+        # 2. Integrate acceleration -> velocity (trapezoidal rule)
         velocity = np.zeros(n)
         for i in range(1, n):
             velocity[i] = velocity[i-1] + 0.5 * (accel_corrected[i] + accel_corrected[i-1]) * dt[i]
-        
-        # 3. High-pass filter velocity at 0.1 Hz using ACTUAL sampling frequency
-        median_dt = float(np.median(dt))
-        if median_dt > 0:
-            fs = 1.0 / median_dt
-        else:
-            fs = 100.0
-        fs = float(np.clip(fs, 10.0, 200.0))
-        
-        hp_cutoff = 0.1  # Hz
-        nyq = 0.5 * fs
-        normal_cutoff = hp_cutoff / nyq
-        if normal_cutoff < 0.99:
-            try:
-                ba = butter(2, normal_cutoff, btype='high', analog=False)
-                if ba is not None and len(ba) >= 2:
-                    b_hp = ba[0]
-                    a_hp = ba[1]
-                    velocity = filtfilt(b_hp, a_hp, velocity)
-            except Exception as e:
-                logger.warning(f"ST5b: Velocity high-pass filter failed: {e}")
-        
-        # 4. Integrate velocity -> displacement (cumulative sum)
+
+        # 3. Integrate velocity -> displacement (double trapezoidal rule)
         displacement = np.zeros(n)
         for i in range(1, n):
             displacement[i] = displacement[i-1] + 0.5 * (velocity[i] + velocity[i-1]) * dt[i]
-        
-        # 5. High-pass filter displacement at 0.1 Hz using ACTUAL sampling frequency
-        median_dt = float(np.median(dt))
-        if median_dt > 0:
-            fs = 1.0 / median_dt
-        else:
-            fs = 100.0
-        fs = float(np.clip(fs, 10.0, 200.0))
-        
-        normal_cutoff = 0.1 / (0.5 * fs)
-        if normal_cutoff < 0.99:
-            try:
-                ba = butter(2, normal_cutoff, btype='high', analog=False)
-                if ba is not None and len(ba) >= 2:
-                    b_hp = ba[0]
-                    a_hp = ba[1]
-                    displacement = filtfilt(b_hp, a_hp, displacement)
-            except Exception as e:
-                logger.warning(f"ST5b: Displacement high-pass filter failed: {e}")
-        
-        # 6. Remove linear trend from displacement (removes constant velocity drift)
-        idx = np.arange(n)
-        coeffs = np.polyfit(np.arange(n), displacement, 1)
-        trend = np.polyval(coeffs, idx)
-        displacement = displacement - trend
-        
-        # 7. Clip displacement > 5m (reference clips at 5m)
-        displacement = np.clip(displacement, -5.0, 5.0)
-        
+
+        # 4. Clip |displacement| > MAX_DISPLACEMENT_M (thesis: outliers)
+        max_disp = PreprocessingPipeline.MAX_DISPLACEMENT_M
+        displacement = np.clip(displacement, -max_disp, max_disp)
+
         df['vertical_displacement'] = displacement
         logger.info(f"ST5b: Vertical displacement computed (range: {displacement.min():.6f} to {displacement.max():.6f} m)")
-        
+
         return df
 
     @classmethod

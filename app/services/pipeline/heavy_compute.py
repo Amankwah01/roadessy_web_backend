@@ -18,7 +18,7 @@ from app.core.config import ASTM_QCM_IRI_ENABLED, astm_track_state
 from app.core.logger import get_pipeline_logger, monitor
 from app.database.session import IS_POSTGRES, SessionLocal
 from app.models.calibration import CalibrationProfile
-from app.models.survey import IRISegment, MapMatchingRun, SurveyRun, TrackedDefect
+from app.models.survey import IRISegment, MapMatchingRun, PCISegment, SurveyRun, TrackedDefect
 from app.services.fusion import PavementConditionFusioneer
 from app.services.fusion.alignment import build_inertial_track
 from app.services.inertial import (
@@ -34,6 +34,7 @@ from app.services.vision import (
     VideoQualityMetrics,
     FrameSamplingInfo,
 )
+from app.services.vision.service import DEFAULT_MODEL_PATH
 from app.services.vision.depth import (
     DepthAnythingV2Estimator,
     GeometryAnchoredDepthScaler,
@@ -67,12 +68,12 @@ class HeavyComputePipeline:
     - IRI: QCM at 100Hz upsampled (ASTM E1926/E950)
     - Vision: MDPI Sensors 2024 paper methodology
     - Output: ASTM PCI (IRI reported separately per ASTM D6433)
-    
+
 Pipeline 2: Roadessy (Custom/Ghana-aligned)
 - IRI: Simple displacement-to-distance method (Enochs Thesis Eq 2.9/3.9)
 - Vision: Ghana Manual 2023 Table 3 ratings + custom DV computation
 - Output: Roadessy PCI = 100 - corrected(DV_sum) (IRI reported separately)
-    
+
     Both pipelines share: GPS loading, spatial map-matching, camera calibration
     """
 
@@ -110,6 +111,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         # inertial logger always uses the GPS recorded in its own CSV.
         self.gps_source = "auto"
         self.video_file_path: Optional[str] = None
+        self.gps_file_path: Optional[str] = None
 
     @monitor(stage="heavy_compute_pipeline_execution")
     def run_pipeline(
@@ -139,6 +141,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         #: order; "overlay" reads the position burned into the video itself.
         self.gps_source = gps_source or "auto"
         self.video_file_path = video_file_path
+        self.gps_file_path = gps_file_path
         self.user_id = user_id or "operator_default"
         self.organisation_id = organisation_id or "org_default"
         self.run_name = run_name or f"Survey_{self.run_id[:8]}"
@@ -169,14 +172,8 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 run_id=self.run_id,
             )
 
-        # 1. Load and parse input datasets (shared)
-        gps_df = self._load_gps_data(gps_file_path)
-
-        # The inertial logger's position comes from the GPS recorded inside its
-        # own CSV and is never taken from `gps_df`. The two describe the vehicle
-        # at different rates and the accelerometer's own fix is the one its
-        # samples are actually stamped against, so letting the video's route
-        # choice reach in here would silently re-time the IRI.
+        # 1. Load and parse input datasets
+        # Load vibration first (its GPS used for inertial processing)
         if vibration_file_path and os.path.exists(vibration_file_path):
             vibe_timestamps, vibe_accel, vibe_speeds, vibe_lat, vibe_lon = self._load_vibration_data(vibration_file_path)
         elif raw_z_accel and len(raw_z_accel) > 0:
@@ -188,19 +185,32 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         else:
             vibe_timestamps, vibe_accel, vibe_speeds, vibe_lat, vibe_lon = self._load_vibration_data(vibration_file_path)
 
+        # Store vibration GPS for video fallback
+        self._vibe_lat = vibe_lat
+        self._vibe_lon = vibe_lon
+        self._vibe_timestamps = vibe_timestamps
+        self._vibe_speeds = vibe_speeds
+
+        # Load GPS for map matching (selected source: overlay, video, csv, vib_csv, gpx, srt, json)
+        gps_df = self._load_gps_data(gps_file_path, vibe_lat, vibe_lon, vibe_timestamps, vibe_speeds)
+
+        # Load video GPS for vision processing (video's own GPS: overlay, video, csv, gpx, srt, json)
+        # Does NOT use vib_csv - video should use its own GPS source
+        video_gps_df = self._load_video_gps_data(video_file_path)
+
         # 2. Camera calibration parameters lookup (shared).
         # Explicit request metadata wins, then a stored profile, then defaults.
         cam_height, cam_tilt, cam_fx, cam_fy, cam_cx, cam_cy, cam_distortion = self._resolve_camera_calibration(
             camera_profile_id, camera_overrides
         )
-        
+
         # Initialize new components (DepthAnythingV2 is optional - only used if available)
         dav2_estimator = None
         try:
             dav2_estimator = DepthAnythingV2Estimator(encoder='vits')
         except Exception as exc:
             logger.warning(f"DepthAnythingV2 not available, dense depth estimation disabled: {exc}", run_id=self.run_id)
-        
+
         # Only the MBTP estimator is used downstream; the scaler/segmentor/
         # fusion/IMU helpers are constructed inside their owning services.
         mbtp_estimator = MBTPAreaEstimator()
@@ -216,7 +226,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             latitudes=vibe_lat,
             longitudes=vibe_lon,
         )
-        
+
         # 3b. ASTM QCM (100Hz upsampled, quality flags) - Pipeline 1
         #
         # Skipped outright when the ASTM track is muted: this resamples to 100 Hz
@@ -265,7 +275,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
 
         # 5. Process Video Stream -> TWO vision methods
         astm_vision = ASTMVisionResult(
-            detections=[], 
+            detections=[],
             video_quality=VideoQualityMetrics(
                 fps=0, resolution=(0,0), motion_blur_score=0, illumination_score=0,
                 gps_sync_quality=0, fps_flag="INSUFFICIENT", frames_analyzed=0, frames_skipped=0
@@ -277,7 +287,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             astm_distress_mapping={}, ghana_distress_mapping={}
         )
         roadessy_vision = ASTMVisionResult(
-            detections=[], 
+            detections=[],
             video_quality=VideoQualityMetrics(
                 fps=0, resolution=(0,0), motion_blur_score=0, illumination_score=0,
                 gps_sync_quality=0, fps_flag="INSUFFICIENT", frames_analyzed=0, frames_skipped=0
@@ -289,8 +299,9 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             astm_distress_mapping={}, ghana_distress_mapping={}
         )
         if video_file_path and os.path.exists(video_file_path):
-            # 5a. ASTM Vision (MDPI paper) - Pipeline 1
+            # Vision Detection (Ghana Table 3) - Roadessy Pipeline Only
             vision_service = VisionAnalysisService(
+                model_path=DEFAULT_MODEL_PATH,
                 camera_height_m=cam_height,
                 camera_tilt_deg=cam_tilt,
                 fx=cam_fx,
@@ -299,20 +310,39 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 cy=cam_cy,
                 distortion_coefficients=cam_distortion,
                 use_overlay_clock=self.use_overlay_clock,
+                # Lower confidence and larger image size for 4K footage
+                # Model trained on 640x640, but 4K frames need larger processing
+                conf=0.15,
+                iou=0.5,
+                imgsz=1280,
             )
             gps_records = (
-                cast(List[Dict[str, Any]], gps_df.to_dict(orient="records"))
-                if not gps_df.empty
+                cast(List[Dict[str, Any]], video_gps_df.to_dict(orient="records"))
+                if not video_gps_df.empty
                 else None
             )
-            
-            astm_vision = vision_service.process_video_astm(
+
+            roadessy_vision = vision_service.process_video_astm(
                 video_path=video_file_path,
                 gps_points=gps_records,
                 run_id=self.run_id,
                 target_fps=15.0,
             )
-            
+
+            # ASTM Vision - empty result (no ASTM vision detection)
+            astm_vision = ASTMVisionResult(
+                detections=[],
+                video_quality=VideoQualityMetrics(
+                    fps=0, resolution=(0,0), motion_blur_score=0, illumination_score=0,
+                    gps_sync_quality=0, fps_flag="INSUFFICIENT", frames_analyzed=0, frames_skipped=0
+                ),
+                frame_sampling=FrameSamplingInfo(
+                    original_fps=0, processed_fps=0, sampling_method="none",
+                    total_frames=0, processed_frames=0
+                ),
+                astm_distress_mapping={}, ghana_distress_mapping={}
+            )
+
             # 5b. Dense Depth Estimation (NEW - DepthAnythingV2)
             abs_depth = None
             if dav2_estimator is not None and video_file_path and os.path.exists(video_file_path):
@@ -329,10 +359,10 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                         logger.warning("Could not read video frame for depth estimation", run_id=self.run_id)
                 except Exception as exc:
                     logger.error(f"Dense depth estimation failed: {exc}", run_id=self.run_id)
-            
+
             # 5c. Pothole Depth Detection (NEW - MBTP + RGB Segmentation)
             pothole_depths = {}
-            if astm_vision.detections and abs_depth is not None:
+            if roadessy_vision.detections and abs_depth is not None:
                 logger.info("Running pothole depth detection (MBTP + RGB Segmentation)", run_id=self.run_id)
 
                 # Scale relative depth to metric using geometry-anchored scaling
@@ -349,7 +379,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 cap_depth = cv2.VideoCapture(video_file_path)
 
                 # Process each pothole detection
-                for det in astm_vision.detections:
+                for det in roadessy_vision.detections:
                     if det.get("yolo_class_id") == 4:  # Pothole class
                         bbox = det.get("bbox")  # [x1, y1, x2, y2]
                         if bbox:
@@ -388,21 +418,15 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                                     logger.warning(f"MBTP estimation failed for pothole at chainage {det.get('chainage_m')}: {exc}", run_id=self.run_id)
 
                 cap_depth.release()
-            
-            # 5d. Roadessy Vision (Ghana Table 3) - Pipeline 2
-            # Reuse the same detections but with Ghana mapping
-            roadessy_vision = ASTMVisionResult(
-                detections=astm_vision.detections,  # Same detections, different mappings
-                video_quality=astm_vision.video_quality,
-                frame_sampling=astm_vision.frame_sampling,
-                astm_distress_mapping=astm_vision.astm_distress_mapping,
-                ghana_distress_mapping=astm_vision.ghana_distress_mapping,
-            )
 
-        # The road the 50 m sections are cut from, in coordinates as well as
-        # distance, so the vision detections can be placed on it. Without this
-        # the two 50 m tables are indexed from two different origins.
-        inertial_track = build_inertial_track(vibe_lat, vibe_lon)
+            # Roadessy Vision (Ghana Table 3) - Already computed above
+            # Use the same detections with Ghana mapping
+            # The process_video_astm already includes Ghana mapping
+
+            # The road the 50 m sections are cut from, in coordinates as well as
+            # distance, so the vision detections can be placed on it. Without this
+            # the two 50 m tables are indexed from two different origins.
+            inertial_track = build_inertial_track(vibe_lat, vibe_lon)
 
         # Give each detection its station along the matched road, when the run
         # matched one. A detection's own chainage is distance since the survey
@@ -411,18 +435,16 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         # holds across every survey of it. Applied after the vision results
         # exist and before anything is written out, so the CSVs, the annotated
         # video and the database all carry the same station.
-        if astm_vision.detections:
-            astm_vision.detections[:] = SpatialService.apply_absolute_stations(
-                astm_vision.detections, gps_df, map_match_result
+        if roadessy_vision.detections:
+            roadessy_vision.detections[:] = SpatialService.apply_absolute_stations(
+                roadessy_vision.detections, video_gps_df, map_match_result
             )
-            if roadessy_vision.detections is astm_vision.detections:
-                roadessy_vision.detections = astm_vision.detections
             positioned = sum(
-                1 for d in astm_vision.detections if d.get("station_m") is not None
+                1 for d in roadessy_vision.detections if d.get("station_m") is not None
             )
             if positioned:
                 logger.info(
-                    f"{positioned} of {len(astm_vision.detections)} defects placed at a road "
+                    f"{positioned} of {len(roadessy_vision.detections)} defects placed at a road "
                     f"station on {map_match_result.get('matched_road_id') or 'the matched road'}.",
                     run_id=self.run_id,
                 )
@@ -435,16 +457,32 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                     run_id=self.run_id,
                 )
 
-        # 6. Run BOTH pipelines
-        # Pipeline 1: ASTM
-        astm_result = PavementConditionFusioneer.compute_astm_pipeline(
-            astm_qcm=astm_qcm,
-            astm_vision=astm_vision,
-            run_id=self.run_id,
-            inertial_track=inertial_track,
-        )
-        
-        # Pipeline 2: Roadessy
+        # 6. Run Roadessy pipeline (ASTM track is disabled by default)
+        # Pipeline 1: ASTM - muted, use pre-computed null result
+        from app.core.config import ASTM_TRACK_DISABLED_REASON
+        astm_result = {
+            "astm_pci": None,
+            "astm_pci_class": None,
+            "astm_pci_enabled": False,
+            "astm_track_enabled": False,
+            "astm_track_disabled_reason": ASTM_TRACK_DISABLED_REASON,
+            "qcm_iri_m_km": None,
+            "qcm_iri_segments_50m": [],
+            "quality_flags": {
+                "astm_track_disabled": True,
+                "pci_provenance": None,
+            },
+            "upsampling_info": {},
+            "breakdown": {
+                "enabled": False,
+                "reason": ASTM_TRACK_DISABLED_REASON,
+                "sections": [],
+            },
+            "segment_pci_50m": [],
+            "alignment": {"aligned": False, "reason": "astm_track_disabled"},
+        }
+
+        # Pipeline 2: Roadessy (uses vision with Ghana mapping)
         roadessy_result = PavementConditionFusioneer.compute_roadessy_pipeline(
             simple_result=simple_result,
             roadessy_vision=roadessy_vision,
@@ -465,7 +503,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 video_path=video_file_path,
                 gps_path=gps_file_path,
                 map_match_result=map_match_result,
-                defect_image_map=self._save_detected_frames(video_file_path, astm_vision.detections),
+                defect_image_map=self._save_detected_frames(video_file_path, roadessy_vision.detections),
             )
 
 
@@ -491,35 +529,27 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             f"Pipeline completed successfully. Outputs saved to {self.output_dir}",
             run_id=self.run_id,
         )
-        
+
         # Log key metrics for monitoring
         logger.metric("heavy_compute_pipeline", "simple_iri_m_km", round(simple_result.iri_m_km, 4), run_id=self.run_id)
         logger.metric("heavy_compute_pipeline", "astm_qcm_iri_m_km", round(astm_qcm.iri_m_km, 4), run_id=self.run_id)
         logger.metric("heavy_compute_pipeline", "total_distance_m", round(simple_result.total_distance_m, 2), run_id=self.run_id)
         logger.metric("heavy_compute_pipeline", "simple_segments", len(simple_result.iri_segments), run_id=self.run_id)
         logger.metric("heavy_compute_pipeline", "astm_qcm_segments", len(astm_qcm.iri_segments), run_id=self.run_id)
-        logger.metric("heavy_compute_pipeline", "defects_detected", len(astm_vision.detections), run_id=self.run_id)
-        logger.metric("heavy_compute_pipeline", "video_fps_flag", astm_vision.video_quality.fps_flag if astm_vision.video_quality else "UNKNOWN", run_id=self.run_id)
-        logger.metric("heavy_compute_pipeline", "video_frames_analyzed", astm_vision.video_quality.frames_analyzed if astm_vision.video_quality else 0, run_id=self.run_id)
-        
+        logger.metric("heavy_compute_pipeline", "defects_detected", len(roadessy_vision.detections), run_id=self.run_id)
+        logger.metric("heavy_compute_pipeline", "video_fps_flag", roadessy_vision.video_quality.fps_flag if roadessy_vision.video_quality else "UNKNOWN", run_id=self.run_id)
+        logger.metric("heavy_compute_pipeline", "video_frames_analyzed", roadessy_vision.video_quality.frames_analyzed if roadessy_vision.video_quality else 0, run_id=self.run_id)
+
         # Log pipeline results
-        if astm_result.get("astm_pci") is None:
-            logger.info(
-                "Pipeline 1 (ASTM): PCI muted (not published), "
-                f"QCM_IRI={astm_result.get('qcm_iri_m_km')}",
-                run_id=self.run_id,
-            )
-        else:
-            logger.info(
-                f"Pipeline 1 (ASTM): PCI={astm_result.get('astm_pci')}, "
-                f"QCM_IRI={astm_result.get('qcm_iri_m_km')}",
-                run_id=self.run_id,
-            )
+        logger.info(
+            "Pipeline 1 (ASTM): PCI muted (not published)",
+            run_id=self.run_id,
+        )
         logger.info(
             f"Pipeline 2 (Roadessy): PCI={roadessy_result.get('roadessy_pci')}, Simple_IRI={roadessy_result.get('simple_iri_m_km')}",
             run_id=self.run_id,
         )
-        
+
         return {
             "run_id": self.run_id,
             "output_dir": str(self.output_dir),
@@ -527,101 +557,127 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             "pipeline_2_roadessy": roadessy_result,
             "map_matching": map_match_result,
             "total_distance_m": simple_result.total_distance_m,
-            "defects_detected": len(astm_vision.detections),
+            "defects_detected": len(roadessy_vision.detections),
             "video_quality": {
-                "fps_flag": astm_vision.video_quality.fps_flag if astm_vision.video_quality else "UNKNOWN",
-                "frames_analyzed": astm_vision.video_quality.frames_analyzed if astm_vision.video_quality else 0,
+                "fps_flag": roadessy_vision.video_quality.fps_flag if roadessy_vision.video_quality else "UNKNOWN",
+                "frames_analyzed": roadessy_vision.video_quality.frames_analyzed if roadessy_vision.video_quality else 0,
                 # The interval and where it came from are what every
                 # detection's chainage rests on, and whether the burned-in clock
                 # was read or the interval was inferred from the GPS span.
-                "seconds_per_frame": astm_vision.frame_sampling.seconds_per_frame,
-                "frame_interval_source": astm_vision.frame_sampling.frame_interval_source,
-                "overlay_clock": astm_vision.frame_sampling.overlay_clock,
+                "seconds_per_frame": roadessy_vision.frame_sampling.seconds_per_frame,
+                "frame_interval_source": roadessy_vision.frame_sampling.frame_interval_source,
+                "overlay_clock": roadessy_vision.frame_sampling.overlay_clock,
             },
         }
 
-    def _load_gps_data(self, gps_file_path: str) -> pd.DataFrame:
-        # Read defensively: this loader is called directly by tests that build
-        # the object without `__init__`, and the source selection is optional in
-        # any case. Defaulting here means "the historical behaviour" always.
-        if getattr(self, "gps_source", "auto") == "overlay":
-            # The video's own burned-in telemetry, rather than a file. It is the
-            # one position record that came from the same camera as the footage,
-            # so it cannot disagree with the video about where the vehicle was
-            # the way a separate logger can.
-            video_path = getattr(self, "video_file_path", None) or ""
-            if not video_path or not os.path.exists(video_path):
-                logger.error(
-                    "The video overlay was chosen as the GPS source but no video is available.",
-                    run_id=self.run_id,
-                )
-                return pd.DataFrame(columns=["time", "lat", "lon", "Speed", "GPSAcc"])
-            try:
-                df = UniversalGPSService.load_overlay_gps(video_path)
-            except (ValueError, OSError) as error:
-                # A missing overlay is a fallback, not a failed survey: the
-                # camera's own GPS log is the next best source and is preferred
-                # over the vibration logger, whose fix goes stale.
-                logger.warning(
-                    f"Overlay GPS unavailable ({error}). Falling back to the uploaded GPS file.",
-                    run_id=self.run_id,
-                )
-                df = pd.DataFrame()
-            if not df.empty:
-                return df
+    def _load_video_gps_data(
+        self,
+        video_file_path: Optional[str],
+    ) -> pd.DataFrame:
+        """Load GPS for video/vision processing.
 
-        if not gps_file_path or not os.path.exists(gps_file_path):
-            logger.warning(f"GPS file not found: {gps_file_path}", run_id=self.run_id)
+        Uses the video's own GPS sources: overlay, video metadata, csv, gpx, srt, json.
+        Falls back to vibration GPS if video has no GPS (so defects get chainage).
+        Does NOT use vibration CSV GPS (vib_csv) as primary source.
+        """
+        if not video_file_path or not os.path.exists(video_file_path):
+            logger.warning("Video file not found for video GPS", run_id=self.run_id)
             return pd.DataFrame(columns=["time", "lat", "lon", "Speed", "GPSAcc"])
 
-        df = pd.read_csv(gps_file_path)
-        df.columns = [str(col).strip() for col in df.columns]
+        # Use the selected GPS source, but exclude "vib_csv" and "auto" for video
+        gps_source = getattr(self, "gps_source", "auto")
+        if gps_source in ("auto", "vib_csv"):
+            # For "auto", prefer video sources: overlay, video, csv, gpx, srt, json
+            # UniversalGPSService.detect_gps_source will pick the best available
+            gps_source = "auto"
 
-        col_map = {
-            "latitude": "lat", "Latitude": "lat",
-            "Longitude": "lon", "longitude": "lon",
-            "speed": "Speed", "Speed ": "Speed", "speed ": "Speed",
-            "accuracy": "GPSAcc",
-        }
-        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
-
-        # The time axis is resolved by inspecting column *values*, via the same
-        # routine the rest of the GPS loading uses. Deciding by name was wrong for
-        # these exports: the video GPS files carry the elapsed video clock in
-        # `Timestamp` as `H:MM:SS` strings (`0:00:00`, `0:37:21`) and the wall
-        # clock in `Global_Second`, and reading the named column as a number then
-        # as a datetime left the whole column at zero — `to_numeric` yields nothing
-        # for `0:00:00`, and dateutil reads it as midnight on an arbitrary date.
-        # A time column of all zeros then collapses the vision interpolators, and
-        # every frame in the video resolved to the first GPS fix at chainage 0 m.
-        time_series, time_source = UniversalGPSService._resolve_time_axis(df, prefer_recintvl=False)
-        if time_series is None:
-            # No column could be read as a clock. A 1 Hz axis is a guess, so it is
-            # labelled as one rather than presented as measured time.
-            time_series = pd.Series(np.arange(len(df), dtype=np.float64), index=df.index)
-            time_source = "assumed_1hz"
-        df["time"] = pd.to_numeric(time_series, errors="coerce")
-
-        # The vision service looks a frame up at `frame_idx / fps` — elapsed
-        # seconds since the video started — so the axis has to start at zero. The
-        # video GPS already does, but an external GPS export carries a session
-        # counter, and the interpolators hold anything outside their range at the
-        # nearest endpoint rather than reporting a miss.
-        if len(df) and df["time"].notna().any():
-            df["time"] = df["time"] - float(df["time"].min())
-
-        if time_source not in ("time", "timestamp", "elapsed", "seconds", "second", "assumed_1hz"):
-            logger.warning(
-                f"GPS time axis read from {time_source!r}; frames are matched against "
-                f"elapsed video time, so confirm this file's clock is video-relative.",
-                run_id=self.run_id,
+        try:
+            df = UniversalGPSService.load_gps_universal(
+                video_path=video_file_path,
+                external_file=getattr(self, "gps_file_path", None),  # for csv/gpx/srt/json
+                source=gps_source,
             )
+            logger.info(f"Loaded video GPS from source '{gps_source}' ({len(df)} points)", run_id=self.run_id)
+            return df
+        except (ValueError, OSError, RuntimeError) as error:
+            logger.warning(f"Video GPS unavailable ({error}), falling back to vibration GPS", run_id=self.run_id)
+            # Fall back to vibration GPS so defects still get chainage/station
+            vibe_lat = getattr(self, "_vibe_lat", None)
+            vibe_lon = getattr(self, "_vibe_lon", None)
+            vibe_timestamps = getattr(self, "_vibe_timestamps", None)
+            vibe_speeds = getattr(self, "_vibe_speeds", None)
+            if vibe_lat is not None and vibe_lon is not None:
+                if len(vibe_lat) > 0 and len(vibe_lon) > 0:
+                    valid = np.isfinite(vibe_lat) & np.isfinite(vibe_lon)
+                    if np.any(valid):
+                        logger.info(f"Using vibration GPS for video ({np.sum(valid)} points)", run_id=self.run_id)
+                        return pd.DataFrame({
+                            "time": vibe_timestamps[valid] if vibe_timestamps is not None else np.arange(np.sum(valid)),
+                            "lat": vibe_lat[valid],
+                            "lon": vibe_lon[valid],
+                            "Speed": vibe_speeds[valid] if vibe_speeds is not None else 0.0,
+                            "GPSAcc": 0.0,
+                        })
+            return pd.DataFrame(columns=["time", "lat", "lon", "Speed", "GPSAcc"])
 
-        for col in ["lat", "lon", "Speed", "GPSAcc"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
+    def _load_gps_data(
+        self,
+        gps_file_path: Optional[str],
+        vibe_lat: Optional[np.ndarray] = None,
+        vibe_lon: Optional[np.ndarray] = None,
+        vibe_timestamps: Optional[np.ndarray] = None,
+        vibe_speeds: Optional[np.ndarray] = None,
+    ) -> pd.DataFrame:
+        """Load GPS for map matching using the selected GPS source.
 
-        return df
+        GPS sources: auto, overlay, video, csv, vib_csv, gpx, srt, json
+        """
+        if not gps_file_path:
+            # No GPS file uploaded - use vibration GPS as fallback
+            if vibe_lat is not None and vibe_lon is not None:
+                if len(vibe_lat) > 0 and len(vibe_lon) > 0:
+                    valid = np.isfinite(vibe_lat) & np.isfinite(vibe_lon)
+                    if np.any(valid):
+                        logger.info(f"Using vibration GPS as fallback ({np.sum(valid)} points)", run_id=self.run_id)
+                        return pd.DataFrame({
+                            "time": vibe_timestamps[valid] if vibe_timestamps is not None else np.arange(np.sum(valid)),
+                            "lat": vibe_lat[valid],
+                            "lon": vibe_lon[valid],
+                            "Speed": vibe_speeds[valid] if vibe_speeds is not None else 0.0,
+                            "GPSAcc": 0.0,
+                        })
+            return pd.DataFrame(columns=["time", "lat", "lon", "Speed", "GPSAcc"])
+
+        gps_source = getattr(self, "gps_source", "auto")
+        if gps_source not in ("auto", "overlay", "video", "csv", "vib_csv", "gpx", "srt", "json"):
+            logger.warning(f"Unknown GPS source '{gps_source}', defaulting to 'auto'", run_id=self.run_id)
+            gps_source = "auto"
+
+        try:
+            df = UniversalGPSService.load_gps_universal(
+                video_path=getattr(self, "video_file_path", None),
+                external_file=gps_file_path,
+                source=gps_source,
+                vibration_csv=vibration_file_path if gps_source == "vib_csv" else None,
+            )
+            logger.info(f"Loaded map matching GPS from source '{gps_source}' ({len(df)} points)", run_id=self.run_id)
+            return df
+        except (ValueError, OSError) as error:
+            logger.warning(f"Map matching GPS unavailable ({error}), falling back", run_id=self.run_id)
+            # Fall back to vibration GPS if available
+            if vibe_lat is not None and vibe_lon is not None:
+                if len(vibe_lat) > 0 and len(vibe_lon) > 0:
+                    valid = np.isfinite(vibe_lat) & np.isfinite(vibe_lon)
+                    if np.any(valid):
+                        logger.info(f"Using vibration GPS as fallback ({np.sum(valid)} points)", run_id=self.run_id)
+                        return pd.DataFrame({
+                            "time": vibe_timestamps[valid] if vibe_timestamps is not None else np.arange(np.sum(valid)),
+                            "lat": vibe_lat[valid],
+                            "lon": vibe_lon[valid],
+                            "Speed": vibe_speeds[valid] if vibe_speeds is not None else 0.0,
+                            "GPSAcc": 0.0,
+                        })
+            return pd.DataFrame(columns=["time", "lat", "lon", "Speed", "GPSAcc"])
 
     def _load_vibration_data(
         self, vibration_file_path: str
@@ -665,11 +721,11 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             if len(finite_ts) > 1:
                 diffs = np.diff(finite_ts)
                 ts_span = float(finite_ts[-1] - finite_ts[0])
-                # Check if timestamps are integer counters (0, 1, 2, ...) 
+                # Check if timestamps are integer counters (0, 1, 2, ...)
                 is_counter = np.allclose(diffs, 1.0, atol=1e-6)
                 # Or if datetime parse gave nanosecond epoch values (very small span for many samples)
                 is_nanosecond_epoch = ts_span < 1.0 and len(finite_ts) > 100
-                
+
                 if is_counter:
                     timestamps = timestamps * recintvl
                     logger.info(f"Converted timestamps using RecIntvl={recintvl}s", run_id=self.run_id)
@@ -711,7 +767,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 long = long[valid_mask]
 
         return timestamps, accel_z, speeds, lat, long
-     
+
     def _resolve_camera_calibration(
         self,
         camera_profile_id: Optional[int],
@@ -856,7 +912,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         # 1. Save IRI segments
         iri_dir = self.output_dir / "iri_segments"
         iri_dir.mkdir(exist_ok=True)
-        
+
         # Simple IRI segments (Roadessy)
         simple_df = pd.DataFrame([{
             "segment_index": i,
@@ -866,7 +922,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             "classification": InertialRefineryService.classify_iri_5rank(s.iri_m_km)["rank"],
         } for i, s in enumerate(simple_result.iri_segments)])
         simple_df.to_csv(iri_dir / "simple_iri_50m.csv", index=False)
-        
+
         # ASTM QCM IRI segments. The IRI is a real measurement from the
         # vibration data and is independent of the muted PCI, so it still runs
         # unless explicitly switched off.
@@ -879,11 +935,11 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 "classification": InertialRefineryService.classify_iri_5rank(s.iri_m_km)["rank"],
             } for i, s in enumerate(astm_qcm.iri_segments)])
             astm_df.to_csv(iri_dir / "astm_qcm_iri_50m.csv", index=False)
-        
+
         # 3. Save PCI segments
         pci_dir = self.output_dir / "pci_segments"
         pci_dir.mkdir(exist_ok=True)
-        
+
         # ASTM segment PCI. Absent while the PCI is muted, so no file is written
         # rather than a file of blanks.
         astm_seg_pci = astm_result.get("segment_pci_50m", [])
@@ -893,32 +949,32 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             logger.info(
                 "ASTM segment PCI not written: PCI muted", run_id=self.run_id
             )
-        
+
         # Roadessy segment PCI
         roadessy_seg_pci = roadessy_result.get("segment_pci_50m", [])
         if roadessy_seg_pci:
             pd.DataFrame(roadessy_seg_pci).to_csv(pci_dir / "roadessy_segment_pci_50m.csv", index=False)
-        
+
         # 4. Save vision detections
         vision_dir = self.output_dir / "vision_detections"
         vision_dir.mkdir(exist_ok=True)
-        
+
         if astm_vision.detections:
             det_df = pd.DataFrame(astm_vision.detections)
             det_df.to_csv(vision_dir / "detections_all.csv", index=False)
-            
+
             # Per distress type (ASTM)
             for distress_type in det_df["astm_distress_type"].unique():
                 subset = det_df[det_df["astm_distress_type"] == distress_type]
                 safe_type = self._sanitize_filename(distress_type)
                 subset.to_csv(vision_dir / f"detections_astm_{safe_type}.csv", index=False)
-            
+
             # Per distress type (Ghana)
             for distress_type in det_df["ghana_distress_type"].unique():
                 subset = det_df[det_df["ghana_distress_type"] == distress_type]
                 safe_type = self._sanitize_filename(distress_type)
                 subset.to_csv(vision_dir / f"detections_ghana_{safe_type}.csv", index=False)
-        
+
         # Video quality report
         vq = astm_vision.video_quality
         if vq:
@@ -933,7 +989,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                     "frames_analyzed": vq.frames_analyzed,
                     "frames_skipped": vq.frames_skipped,
                 }, f, indent=2)
-        
+
         # Frame sampling info
         if astm_vision.frame_sampling:
             fs = astm_vision.frame_sampling
@@ -945,11 +1001,11 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                     "total_frames": fs.total_frames,
                     "processed_frames": fs.processed_frames,
                 }, f, indent=2)
-        
+
         # 5. Save fusion results
         fusion_dir = self.output_dir / "fusion_results"
         fusion_dir.mkdir(exist_ok=True)
-        
+
         def convert(obj):
             if isinstance(obj, (np.integer, np.floating)):
                 return float(obj)
@@ -960,24 +1016,24 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             if isinstance(obj, list):
                 return [convert(v) for v in obj]
             return obj
-        
+
         with open(fusion_dir / "pipeline_1_astm.json", "w") as f:
             json.dump(convert(astm_result), f, indent=2)
-        
+
         with open(fusion_dir / "pipeline_2_roadessy.json", "w") as f:
             json.dump(convert(roadessy_result), f, indent=2)
-        
+
         # 6. Save map matching results
         map_dir = self.output_dir / "map_matching"
         map_dir.mkdir(exist_ok=True)
-        
+
         if map_match_result.get("snapped_coords"):
             map_df = pd.DataFrame(map_match_result["snapped_coords"])
             map_df.to_csv(map_dir / "snapped_coords.csv", index=False)
-        
+
         with open(map_dir / "map_match_summary.json", "w") as f:
             json.dump(convert(map_match_result), f, indent=2)
-        
+
         # 7. Save GPS trajectory
         if not gps_df.empty:
             gps_df.to_csv(self.output_dir / "gps_trajectory.csv", index=False)
@@ -1183,7 +1239,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             # free-form centerline id from map matching and is stored separately.
             road_id_uuid = _coerce_uuid(self.road_uuid)
             project_id_uuid = _coerce_uuid(self.project_id)
-            
+
             # Fallback: if map matching didn't provide trajectory, build from GPS file
             if not trajectory_wkt and gps_path and os.path.exists(gps_path):
                 try:
@@ -1197,7 +1253,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                             logger.info(f"Built fallback trajectory from GPS ({len(coords)} points)", run_id=self.run_id)
                 except Exception as e:
                     logger.warning(f"Failed to build fallback trajectory: {e}", run_id=self.run_id)
-            
+
             survey_run = SurveyRun(
                 run_id=self.run_id,
                 name=self.run_name,
@@ -1205,7 +1261,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 organisation_id=self.organisation_id,
                 project_id=project_id_uuid,
                 road_id=road_id_uuid,
-                
+
                 # Pipeline 1: ASTM. astm_pci and astm_qcm_iri are both None while
                 # their track is muted; the columns are nullable and stay null
                 # rather than being filled with a placeholder number. A 0.0 here
@@ -1222,15 +1278,15 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 ),
                 astm_quality_flags=astm_result["quality_flags"],
                 astm_upsampling_info=astm_result["upsampling_info"],
-                
+
                 # Pipeline 2: Roadessy
                 simple_iri=float(roadessy_result["simple_iri_m_km"]),
                 roadessy_pci=float(roadessy_result["roadessy_pci"]),
-                
+
                 # Legacy (backward compat)
                 computed_iri=float(simple_result.iri_m_km),
                 final_pci=float(roadessy_result["roadessy_pci"]),  # Primary PCI
-                
+
                 matched_road_id=matched_road_id,
                 geom_trajectory=_geometry_value(trajectory_wkt),
                 workspace_dir=str(self.output_dir),
@@ -1266,17 +1322,67 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
             )
             self.db.add(map_match_record)
 
+# Persist PCI Segments
+            pci_seg_map = self._persist_pci_segments(simple_result, astm_result, roadessy_result, matched_road_id)
+
             # Persist IRI Segments
-            self._persist_iri_segments(simple_result, astm_qcm, matched_road_id, astm_result, roadessy_result)
+            self._persist_iri_segments(simple_result, astm_qcm, matched_road_id, astm_result, roadessy_result, pci_seg_map)
 
             # Persist Defects
-            self._persist_defects(astm_vision.detections, matched_road_id, defect_image_map)
+            self._persist_defects(astm_vision.detections, matched_road_id, defect_image_map, pci_seg_map)
             
             self.db.commit()
         except Exception as exc:
             self.db.rollback()
             logger.error(f"Failed to persist database records: {exc}", run_id=self.run_id)
             raise
+
+    def _persist_pci_segments(
+        self,
+        simple_result: InertialPipelineResult,
+        astm_result: Dict[str, Any],
+        roadessy_result: Dict[str, Any],
+        road_id: Optional[str],
+    ) -> Dict[int, int]:
+        """Persist PCI segments and return a mapping from segment index to DB ID."""
+        astm_seg_pci = astm_result.get("segment_pci_50m", [])
+        roadessy_seg_pci = roadessy_result.get("segment_pci_50m", [])
+        seg_map = {}
+
+        # Use the max length of both PCI segment lists
+        max_segs = max(len(astm_seg_pci), len(roadessy_seg_pci))
+
+        for seg_idx in range(max_segs):
+            astm_seg = astm_seg_pci[seg_idx] if seg_idx < len(astm_seg_pci) else None
+            roadessy_seg = roadessy_seg_pci[seg_idx] if seg_idx < len(roadessy_seg_pci) else None
+
+            # Get segment bounds from IRI segments or PCI segments
+            start_m = end_m = 0.0
+            if astm_seg:
+                start_m = float(astm_seg.get("start_m", 0))
+                end_m = float(astm_seg.get("end_m", 0))
+            elif roadessy_seg:
+                start_m = float(roadessy_seg.get("start_m", 0))
+                end_m = float(roadessy_seg.get("end_m", 0))
+
+            db_pci = PCISegment(
+                run_id=self.run_id,
+                user_id=self.user_id,
+                road_id=road_id,
+                segment_start_m=start_m,
+                segment_end_m=end_m,
+                astm_pci=float(astm_seg.get("astm_pci")) if astm_seg and astm_seg.get("astm_pci") is not None else None,
+                roadessy_pci=float(roadessy_seg.get("roadessy_pci")) if roadessy_seg and roadessy_seg.get("roadessy_pci") is not None else None,
+                astm_pci_class=astm_seg.get("astm_pci_class") if astm_seg else None,
+                roadessy_pci_class=roadessy_seg.get("roadessy_pci_class") if roadessy_seg else None,
+                roadessy_deduct_value=roadessy_seg.get("deduct_value") if roadessy_seg else None,
+                # iri_segment_id will be linked after IRI segments are persisted
+            )
+            self.db.add(db_pci)
+            self.db.flush()  # Get the ID
+            seg_map[seg_idx] = db_pci.id
+
+        return seg_map
 
     def _persist_iri_segments(
         self,
@@ -1285,17 +1391,18 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
         road_id: Optional[str],
         astm_result: Dict[str, Any],
         roadessy_result: Dict[str, Any],
+        pci_seg_map: Dict[int, int],
     ) -> None:
         astm_seg_pci = astm_result.get("segment_pci_50m", [])
         roadessy_seg_pci = roadessy_result.get("segment_pci_50m", [])
-        
+
         for seg_idx, seg in enumerate(simple_result.iri_segments):
             astm_seg = roadessy_seg = None
             if seg_idx < len(astm_seg_pci):
                 astm_seg = astm_seg_pci[seg_idx]
             if seg_idx < len(roadessy_seg_pci):
                 roadessy_seg = roadessy_seg_pci[seg_idx]
-            
+
             db_seg = IRISegment(
                 run_id=self.run_id,
                 user_id=self.user_id,
@@ -1305,16 +1412,17 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 iri_value=float(seg.iri_m_km),
                 simple_iri=float(seg.iri_m_km),
                 astm_qcm_iri=float(astm_qcm.iri_segments[seg_idx].iri_m_km) if seg_idx < len(astm_qcm.iri_segments) else None,
-                astm_pci_segment=(
-                    float(astm_seg.get("astm_pci"))
-                    if astm_seg and astm_seg.get("astm_pci") is not None
-                    else None
-                ),
-                roadessy_pci_segment=float(roadessy_seg.get("roadessy_pci", 0)) if roadessy_seg else None,
                 classification=InertialRefineryService.classify_iri_5rank(float(seg.iri_m_km))["rank"],
             )
             self.db.add(db_seg)
-        
+            self.db.flush()
+            # Link PCI segment if exists
+            if seg_idx in pci_seg_map:
+                # Update PCI segment with iri_segment_id
+                pci_seg = self.db.query(PCISegment).filter(PCISegment.id == pci_seg_map[seg_idx]).first()
+                if pci_seg:
+                    pci_seg.iri_segment_id = db_seg.id
+
         # ASTM QCM segments
         for seg_idx in range(len(simple_result.iri_segments), len(astm_qcm.iri_segments)):
             seg = astm_qcm.iri_segments[seg_idx]
@@ -1330,14 +1438,34 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 classification=InertialRefineryService.classify_iri_5rank(float(seg.iri_m_km))["rank"],
             )
             self.db.add(db_seg)
+            self.db.flush()
+            if seg_idx in pci_seg_map:
+                pci_seg = self.db.query(PCISegment).filter(PCISegment.id == pci_seg_map[seg_idx]).first()
+                if pci_seg:
+                    pci_seg.iri_segment_id = db_seg.id
 
     def _persist_defects(
         self,
         detections: List[Dict[str, Any]],
         road_id: Optional[str],
         defect_image_map: Optional[Dict[int, str]] = None,
+        pci_seg_map: Optional[Dict[int, int]] = None,
     ) -> None:
         for track_id, det in enumerate(detections):
+            # Find which PCI segment this defect belongs to (by chainage/station)
+            pci_seg_id = None
+            if pci_seg_map:
+                chainage = det.get("chainage_m") or det.get("station_m")
+                if chainage is not None:
+                    for seg_idx, pci_id in pci_seg_map.items():
+                        # We'll match by checking if chainage falls in segment range
+                        # Since we don't have the ranges here, we approximate by segment index
+                        # The vision service places detections by chainage, which maps to segment index
+                        seg_idx_approx = int(chainage // 50.0)
+                        if seg_idx_approx == seg_idx:
+                            pci_seg_id = pci_id
+                            break
+
             db_defect = TrackedDefect(
                 run_id=self.run_id,
                 user_id=self.user_id,
@@ -1363,11 +1491,7 @@ Pipeline 2: Roadessy (Custom/Ghana-aligned)
                 station_road_id=det.get("station_road_id"),
                 station_source=det.get("station_source"),
                 chainage_offset_m=det.get("chainage_offset_m"),
-                # The vision service already resolved a position per detection
-                # from the interpolated GPS track. It was computed, carried on
-                # every record, and then dropped here, so `geom_location` stayed
-                # null for every defect in the database and the only way to place
-                # one on a map was to re-run the video.
+                pci_segment_id=pci_seg_id,
                 geom_location=self._detection_point(det),
             )
             self.db.add(db_defect)

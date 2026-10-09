@@ -103,11 +103,34 @@ class IRISegment(Base):
     simple_iri = Column(Float, nullable=True)
     astm_qcm_iri = Column(Float, nullable=True)
     
-    # Track-specific PCI values
-    astm_pci_segment = Column(Float, nullable=True)
-    roadessy_pci_segment = Column(Float, nullable=True)
-    
     classification = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class PCISegment(Base):
+    __tablename__ = "pci_segments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    road_id = Column(String, nullable=True, index=True)
+    segment_start_m = Column(Float, nullable=False)
+    segment_end_m = Column(Float, nullable=False)
+    
+    # PCI values per track
+    astm_pci = Column(Float, nullable=True)
+    roadessy_pci = Column(Float, nullable=True)
+    
+    # PCI classifications
+    astm_pci_class = Column(String, nullable=True)
+    roadessy_pci_class = Column(String, nullable=True)
+    
+    # Deduct values for Roadessy (Ghana Manual 2023)
+    roadessy_deduct_value = Column(Float, nullable=True)
+    
+    # Reference to IRI segment
+    iri_segment_id = Column(Integer, nullable=True, index=True)
+    
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -146,6 +169,10 @@ class TrackedDefect(Base):
     station_road_id = Column(String, nullable=True)
     station_source = Column(String, nullable=True)
     chainage_offset_m = Column(Float, nullable=True)
+    
+    # Link to PCI segment this defect contributed to
+    pci_segment_id = Column(Integer, nullable=True, index=True)
+    
     geom_location = _geometry_column("POINT", 4326)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

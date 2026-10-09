@@ -217,6 +217,11 @@ class MBTPAreaEstimator:
         fx, fy = K[0, 0], K[1, 1]
         cx, cy = K[0, 2], K[1, 2]
         x1, y1, x2, y2 = bbox
+        # YOLO boxes arrive as float pixel coordinates; every slice below
+        # needs integers, so normalise once and keep the box inside the frame.
+        x1, y1 = max(0, int(round(x1))), max(0, int(round(y1)))
+        x2, y2 = min(w - 1, int(round(x2))), min(h - 1, int(round(y2)))
+        bbox = (x1, y1, x2, y2)
         
         # Compute ground reference if not provided
         if ground_ref is None:
@@ -253,9 +258,13 @@ class MBTPAreaEstimator:
             return self._fallback_estimate(depth_map, bbox, K, ground_ref)
         
         contour = contours[0]
-        
+
+        # The segmentor's contour is ROI-relative; translate it to full-image
+        # pixel coordinates so triangulation samples the correct depth pixels.
+        contour_img = contour + np.array([[[x1, y1]]])
+
         # Triangulate and compute area
-        triangles, tri_viz = self.triangulate_contour(contour, (h, w))
+        triangles, tri_viz = self.triangulate_contour(contour_img, (h, w))
         
         total_area = 0.0
         for tri in triangles:
@@ -268,9 +277,10 @@ class MBTPAreaEstimator:
         hull_area_m2 = self._pixel_area_to_m2(hull_area_pixels, depth_map, bbox, fx, fy)
         irregularity = 1.0 - (total_area / max(hull_area_m2, 0.001))
         
-        # Volume integration
+        # Volume integration. The segmentor returns the mask at ROI size, so it
+        # already aligns with roi_depth; slicing it again would misalign it.
         roi_depth = depth_map[y1:y2, x1:x2]
-        roi_mask = mask[y1:y2, x1:x2]
+        roi_mask = mask
         depth_deficit = np.maximum(ground_ref - roi_depth, 0)
         pixel_area_m2 = (ground_ref / fx) * (ground_ref / fy)
         volume = float(np.sum(depth_deficit[roi_mask > 0]) * pixel_area_m2)

@@ -93,54 +93,65 @@ class GeometryAnchoredDepthScaler:
         """
         Compute ground plane normal and distance from camera pose.
         
+        World (vehicle) coordinates: x right, y forward, z up
+        Camera coordinates: x right, y down, z forward
+        Camera is at world position [0, 0, height], looking along +y (forward)
+        Ground plane in world: z = 0, normal [0, 0, 1] (pointing up)
+        
         Returns:
-            plane_normal: Normal vector of ground plane in camera coordinates
-            plane_d: Plane distance from camera origin
+            plane_normal: Normal vector of ground plane in camera coordinates (points UP from ground)
+            plane_d: Plane distance from camera origin (d = height for z=0 plane)
         """
+        # Base rotation from world (vehicle) to camera (no pitch/roll)
+        # Camera x = world x (right)
+        # Camera y = -world z (down = negative up)
+        # Camera z = world y (forward)
+        R_base = np.array([[1, 0, 0],
+                           [0, 0, -1],
+                           [0, 1, 0]], dtype=np.float64)
+        
+        # Vehicle rotations (pitch around x, roll around y)
+        # Pitch: rotation around vehicle x-axis (which = camera x), positive = nose up
         pitch = np.radians(pitch_deg)
+        Rx = np.array([[1, 0, 0],
+                       [0, np.cos(pitch), -np.sin(pitch)],
+                       [0, np.sin(pitch), np.cos(pitch)]], dtype=np.float64)
+        
+        # Roll: rotation around vehicle y-axis (which = camera z), positive = right side up
         roll = np.radians(roll_deg)
+        Ry = np.array([[np.cos(roll), 0, np.sin(roll)],
+                       [0, 1, 0],
+                       [-np.sin(roll), 0, np.cos(roll)]], dtype=np.float64)
         
-        # Camera coordinate system: x right, y down, z forward
-        # Ground plane normal in camera coordinates
-        # When pitch=0, roll=0: ground plane is y = -height (y-down coordinate)
-        # Plane equation: n·x + d = 0
-        # Normal points upward from ground
+        # Vehicle rotation matrix (pitch then roll)
+        R_vehicle = Ry @ Rx
         
-        # Rotation from world to camera
-        # World: x right, y forward, z up
-        # Camera: x right, y down, z forward
-        # Pitch: rotation around x (positive = nose up)
-        # Roll: rotation around z (positive = right side up)
-        
-        cp, sp = np.cos(np.radians(pitch_deg)), np.sin(np.radians(pitch_deg))
-        cr, sr = np.cos(np.radians(roll_deg)), np.sin(np.radians(roll_deg))
+        # World to camera rotation = base rotation @ vehicle rotation
+        R_w2c = R_base @ R_vehicle
         
         # Ground normal in world coordinates (pointing up)
         n_world = np.array([0.0, 0.0, 1.0])
         
-        # World to camera rotation (pitch then roll)
-        # Note: camera coordinate system has y-down, z-forward
-        Rx = np.array([[1, 0, 0],
-                       [0, np.cos(-np.radians(pitch_deg)), -np.sin(-np.radians(pitch_deg))],
-                       [0, np.sin(-np.radians(pitch_deg)), np.cos(-np.radians(pitch_deg))]])
-        Rz = np.array([[np.cos(np.radians(roll_deg)), -np.sin(np.radians(roll_deg)), 0],
-                       [np.sin(np.radians(roll_deg)), np.cos(np.radians(roll_deg)), 0],
-                       [0, 0, 1]])
-        
-        # World to camera rotation (pitch then roll)
-        R_w2c = Rz @ Rx
-        
         # Ground normal in camera coordinates
         n_cam = R_w2c @ n_world
         
-        # Plane distance: ground plane passes through (0, -height, 0) in world coords
-        # In camera coordinates: point on ground = R_w2c @ [0, -height, 0] + t_cam
-        # Camera at origin, so t_cam = [0, 0, 0]
-        point_on_ground_world = np.array([0.0, -1.0, 0.0]) * self.camera_height_m
-        point_on_ground_cam = R_w2c @ point_on_ground_world
-        
-        # Plane distance d = -n·p
-        d = -np.dot(n_cam, point_on_ground_cam)
+        # Plane distance: ground plane is z=0 in world, camera at [0, 0, height]
+        # In camera coordinates: n_cam · P_c + d = 0
+        # For point on ground at camera position: P_c = [0, 0, 0] (camera origin)
+        # But ground plane doesn't pass through camera. The plane is z=0 in world.
+        # Camera position in world: [0, 0, height]
+        # Distance from camera to ground plane along world z = height
+        # In camera coordinates, d = n_cam · (point_on_ground_in_cam)
+        # A point on ground in world: [0, 0, 0], transform to camera: 
+        # P_cam = R_w2c @ (P_world - C_world) where C_world = [0, 0, height]
+        # But simpler: plane equation n_world · P_world = 0 (z=0)
+        # P_world = C_world + R_c2w @ P_cam
+        # n_world · (C_world + R_c2w @ P_cam) = 0
+        # n_world · C_world + n_world · (R_c2w @ P_cam) = 0
+        # n_world · C_world + (R_w2c @ n_world) · P_cam = 0
+        # n_world · C_world + n_cam · P_cam = 0
+        # So d = n_world · C_world = height (since n_world = [0,0,1], C_world = [0,0,height])
+        d = float(height_m)
         
         return n_cam, float(d)
     
@@ -202,6 +213,9 @@ class GeometryAnchoredDepthScaler:
         t = np.zeros_like(inv_depth)
         t[valid] = -d / n_dot_ray[valid]
         
+        # Only keep intersections in front of camera (t > 0)
+        valid = valid & (t > 0)
+        
         # Metric depth = t (distance along ray)
         depth = t
         depth[~valid] = 0
@@ -209,13 +223,13 @@ class GeometryAnchoredDepthScaler:
         return depth
     
     def estimate_scale_from_ground_plane(self,
-                                         inv_depth: np.ndarray,
+                                         depth: np.ndarray,
                                          K: np.ndarray,
                                          pitch_deg: float,
                                          roll_deg: float,
                                          height_m: float) -> Tuple[float, float]:
         """
-        Estimate scale and shift to convert inverse depth to metric depth.
+        Estimate scale and shift to convert relative depth to metric depth.
         
         Uses ground plane geometry: intersect rays with ground plane.
         
@@ -226,7 +240,7 @@ class GeometryAnchoredDepthScaler:
         n, d = self.compute_ground_plane(pitch_deg, roll_deg, height_m)
         self.n_ground = n
         
-        h, w = inv_depth.shape
+        h, w = depth.shape
         u, v = np.meshgrid(np.arange(w), np.arange(h))
         
         # Camera rays in normalized coordinates
@@ -238,32 +252,40 @@ class GeometryAnchoredDepthScaler:
         ray_norms = np.linalg.norm(rays, axis=-1, keepdims=True)
         rays_norm = rays / (ray_norms + 1e-8)
         
-        # Intersect with ground plane
-        n_dot_ray = np.sum(rays * self.n_ground, axis=-1)
+        # Intersect with ground plane (use normalized rays for correct distance)
+        n_dot_ray = np.sum(rays_norm * self.n_ground, axis=-1)
         valid = np.abs(n_dot_ray) > 1e-6
         
-        t = np.zeros_like(inv_depth)
+        t = np.zeros_like(depth)
         t[valid] = -d / n_dot_ray[valid]
         
-        # Now we have metric depth t from ground plane intersection
-        # Compare with inverse depth to find scale
-        valid_depth = inv_depth > 0
-        valid_both = valid & valid_depth
+        # Only keep intersections in front of camera (t > 0)
+        valid = valid & (t > 0)
         
-        if np.sum(valid_both) < 10:
+        # Use Z depth (distance along optical axis)
+        z_depth = t * rays_norm[:, :, 2]
+        
+        # Calibrate using lower-middle region (v=0.5 to 0.8) where potholes typically appear
+        # This avoids horizon (v~0.46) where ratio explodes and bottom (v>0.85) where ground is very close
+        pothole_region = (v > h * 0.5) & (v < h * 0.85)
+        valid_ground = valid & pothole_region & (depth > 0) & (z_depth > 0)
+        
+        if np.sum(valid_ground) < 10:
             return 1.0, 0.0
         
-        # Linear regression: metric_depth = scale * (1/inv_depth) + shift
-        inv_d = inv_depth[valid_both]
-        metric_d = t[valid_both]
+        # Compute scale ratios for ground pixels in pothole region
+        ratios = z_depth[valid_ground] / depth[valid_ground]
         
-        # Robust linear fit
-        A = np.column_stack([1.0 / inv_d, np.ones_like(inv_d)])
-        try:
-            scale_shift, _, _, _ = np.linalg.lstsq(A, metric_d, rcond=None)
-            scale, shift = float(scale_shift[0]), float(scale_shift[1])
-        except:
-            scale, shift = 1.0, 0.0
+        # Remove outliers (keep middle 80%)
+        lo, hi = np.percentile(ratios, [10, 90])
+        ratios_clean = ratios[(ratios >= lo) & (ratios <= hi)]
+        
+        if len(ratios_clean) < 10:
+            return 1.0, 0.0
+        
+        # Use median for robustness
+        scale = float(np.median(ratios_clean))
+        shift = 0.0
         
         return scale, shift
     
@@ -282,20 +304,24 @@ class GeometryAnchoredDepthScaler:
             self._state.shift = self._ema(self._state.shift, shift)
             self._state.confidence = self._ema(self._state.confidence, confidence)
     
-    def apply(self, inv_depth: np.ndarray, K: np.ndarray,
+    def apply(self, depth: np.ndarray, K: np.ndarray,
               pitch_deg: float, roll_deg: float, height_m: float) -> np.ndarray:
         """
-        Apply scaling to convert inverse depth to metric depth.
+        Apply scaling to convert relative depth to metric depth.
+        
+        DepthAnythingV2 outputs relative depth (higher = farther).
+        We fit scale/shift using ground plane geometry.
         
         Returns metric depth map in meters.
         """
         if not self._initialized:
             scale, shift = self.estimate_scale_from_ground_plane(
-                inv_depth, K, pitch_deg, roll_deg, height_m
+                depth, K, pitch_deg, roll_deg, height_m
             )
             self.update_state(scale, shift, 0.5)
         
-        metric_depth = self._state.scale / (inv_depth + 1e-6) + self._state.shift
+        # DepthAnythingV2 outputs direct depth: metric = scale * relative_depth + shift
+        metric_depth = self._state.scale * depth + self._state.shift
         return np.clip(metric_depth, 0, 100)  # Clip to reasonable range
     
     def get_state(self) -> ScalerState:
